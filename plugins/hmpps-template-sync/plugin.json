@@ -1,0 +1,11 @@
+{
+  "name": "hmpps-template-sync",
+  "description": "Skills for maintaining and synchronizing our bootstrapped services.",
+  "version": "0.0.1",
+  "author": {
+    "name": "HMPPS Digital",
+    "email": "plugins@hmpps.digital"
+  },
+  "license": "MIT",
+  "keywords": ["maintenance", "template", "patching", "synchronization"]
+}
