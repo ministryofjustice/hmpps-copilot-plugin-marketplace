@@ -35,7 +35,7 @@ To remove the marketplace and uninstall these plugins, run:
 
 | Plugin                                                                                                   | Description                                                                                                                                                    |
 | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`hmpps-template-sync`](plugins/hmpps-template-typescript-sync/hmpps-template-sync/README.md) | Keep your repository in sync with changes from the [hmpps-template-typescript](https://github.com/ministryofjustice/hmpps-template-typescript) shared template |
+| [`hmpps-template-sync`](plugins/hmpps-template-sync/README.md) | Keep your repository in sync with changes from the [hmpps-template-typescript](https://github.com/ministryofjustice/hmpps-template-typescript) shared template |
 | [`skills`](plugins/skills/README.md)                                                                     | General-purpose skill for managing and applying template changes                                                                                               |
 
 ---
