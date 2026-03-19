@@ -2,7 +2,7 @@
 
 A collection of GitHub Copilot skills for HMPPS projects. Each plugin adds AI-assisted workflows to your repository via VS Code's Copilot CLIs plugin system.
 
-To register the market place in your Copilot CLI, run:
+To register the marketplace in your Copilot CLI, run:
 
 ```bash
 /plugin marketplace add ministryofjustice/hmpps-copilot-plugin-marketplace
