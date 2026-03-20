@@ -1,0 +1,19 @@
+{
+  "name": "hmpps-marketplace",
+  "owner": {
+    "name": "HMPPS Digital",
+    "email": "dps-hmpps@digital.justice.gov.uk"
+  },
+  "metadata": {
+    "description": "Curated plugins for our team",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "hmpps-template-sync",
+      "description": "Skills for maintaining and synchronizing our bootstrapped services.",
+      "version": "0.0.1",
+      "source": "plugins/hmpps-template-sync"
+    }
+  ]
+}
