@@ -137,7 +137,7 @@ After running apply-change, summarise the result clearly:
 
 ## Notes and guidance
 
-- **Always run the project's validation steps after applying changes.** For this repo: `npm run typecheck && npm run lint && npm run test`.
+- **Always run the project's validation steps after applying changes.** For the target repository: `npm run typecheck && npm run lint && npm run test`.
 - **The patch may not apply perfectly.** This repo has diverged from the template. Conflicts and skips are normal — the skill is a starting point, not a guarantee of a clean apply.
 - **Rate limiting:** The scripts use unauthenticated GitHub API calls. If you hit a rate limit (HTTP 403/429), wait a minute and try again, or set the `GITHUB_TOKEN` environment variable to authenticate.
 - **Not all template changes are relevant.** Some changes (e.g. switching to Playwright) may not apply to a repo that has already made different choices. Always review the change description before applying.
