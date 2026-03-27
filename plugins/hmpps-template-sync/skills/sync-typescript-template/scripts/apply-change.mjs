@@ -38,6 +38,7 @@ async function fetchPrDiff(pr) {
     headers: {
       Accept: 'application/vnd.github.v3.diff',
       'User-Agent': 'hmpps-template-sync-skill',
+      ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
     },
   })
   if (!response.ok) {
@@ -55,6 +56,7 @@ async function fetchPrFiles(pr) {
     headers: {
       Accept: 'application/vnd.github+json',
       'User-Agent': 'hmpps-template-sync-skill',
+      ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
     },
   })
   if (!response.ok) {

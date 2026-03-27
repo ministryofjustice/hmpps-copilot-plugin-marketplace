@@ -9,37 +9,59 @@ To register the marketplace in your Copilot CLI, run:
 ```
 
 To install a plugin:
+
 ```bash
-/plugin install hmpps-template-sync@hmpps-marketplace 
+/plugin install hmpps-template-sync@hmpps-marketplace
+```
+
+To reload available skills:
+
+```bash
+/skills reload
 ```
 
 To list and view information about the included skill:
+
 ```bash
 skills list
 skills info sync-typescript-template
 ```
 
-To run the skill 
+To run the skill:
+
 ```bash
 /hmpps-template-sync:sync-typescript-template
 ```
 
 To remove the marketplace and uninstall these plugins, run:
+
 ```bash
-    /plugin marketplace remove hmpps-marketplace --force
+/plugin marketplace remove hmpps-marketplace --force
 ```
 
 ---
 
 ## Available plugins
 
-| Plugin                                                                                                   | Description                                                                                                                                                    |
-| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`hmpps-template-sync`](plugins/hmpps-template-sync/README.md) | Keep your repository in sync with changes from the [hmpps-template-typescript](https://github.com/ministryofjustice/hmpps-template-typescript) shared template |
-| [`skills`](plugins/skills/README.md)                                                                     | General-purpose skill for managing and applying template changes                                                                                               |
+| Plugin                                                                                         | Description                                                                                                                                                    |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`hmpps-template-sync`](plugins/hmpps-template-sync/skills/sync-typescript-template/README.md) | Keep your repository in sync with changes from the [hmpps-template-typescript](https://github.com/ministryofjustice/hmpps-template-typescript) shared template |
 
 ---
 
 ## To create a new plugin
 
 See the guide [here](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/plugins-creating).
+
+
+## To test changes to the marketplace
+
+Remove the plugin:
+```bash
+/plugin marketplace remove hmpps-marketplace --force
+```
+
+Add a local checked out marketplace:
+```bash
+/plugin marketplace add <path-to-local-repo>
+```
