@@ -165,6 +165,38 @@ RUN npm ci --omit=dev
 
 ---
 
+### Dockerfile uses HMPPS Node.js base image
+
+| Field | Value |
+|-------|-------|
+| **Check ID** | `dockerfile-base-image` |
+| **Severity** | Critical |
+| **Auto-fix available** | ❌ No — requires manual Dockerfile edit |
+
+**Description:** Checks that all `FROM` instructions in each Dockerfile reference the `ghcr.io/ministryofjustice/hmpps-node` base image.
+
+**Why it matters:** The HMPPS Node.js base image is maintained by the HMPPS platform team and provides a consistently patched Node.js runtime. Using an unofficial or generic Node.js image (e.g. `node:24-alpine` from Docker Hub) means your image won't automatically benefit from HMPPS-specific patches and configuration.
+
+**How to validate manually:**
+1. Open each `Dockerfile` in the repository
+2. Check every `FROM` instruction — all base stages should reference `ghcr.io/ministryofjustice/hmpps-node`, for example:
+   ```dockerfile
+   FROM ghcr.io/ministryofjustice/hmpps-node:24-alpine AS base
+   ```
+3. Multi-stage builds may have intermediate stages that copy from external images (e.g. a build tool image) — these are acceptable as long as the runtime stage uses the HMPPS image
+
+**To fix manually:** Replace the `FROM` instruction(s) with the appropriate HMPPS Node.js image tag. Use the [hmpps-node package registry](https://github.com/ministryofjustice/hmpps-node/pkgs/container/hmpps-node) to find available tags:
+
+```dockerfile
+# Before:
+FROM node:24-alpine AS base
+
+# After:
+FROM ghcr.io/ministryofjustice/hmpps-node:24-alpine AS base
+```
+
+---
+
 ## GitHub configuration
 
 ### GitHub Actions enabled

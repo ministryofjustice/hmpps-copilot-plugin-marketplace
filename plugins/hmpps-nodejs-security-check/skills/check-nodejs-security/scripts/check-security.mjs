@@ -450,6 +450,55 @@ if (dockerfiles.length === 0) {
   }
 }
 
+// 13. Dockerfiles use the HMPPS Node.js base image
+if (dockerfiles.length === 0) {
+  checks.push(
+    result(
+      'dockerfile-base-image',
+      'Dockerfile uses HMPPS Node.js base image',
+      'warn',
+      'No Dockerfile found in the repository root.',
+    ),
+  )
+} else {
+  for (const dockerfilePath of dockerfiles) {
+    const filename = dockerfilePath.split('/').pop()
+    const content = readFile(dockerfilePath)
+    if (!content) continue
+
+    // Match any FROM line (including multi-stage aliases) using the HMPPS Node.js image
+    const fromLines = content.split('\n').filter((l) => /^\s*FROM\s+/i.test(l))
+    const usesHmppsNode = fromLines.some((l) => l.includes('ghcr.io/ministryofjustice/hmpps-node'))
+    
+    if (usesHmppsNode) {
+      // Extract the actual image reference for the detail message
+      const match = fromLines.find((l) => l.includes('ghcr.io/ministryofjustice/hmpps-node'))
+      const imageRef = match?.trim().replace(/^FROM\s+/i, '').split(/\s/)[0] ?? 'unknown'
+      checks.push(
+        result(
+          'dockerfile-base-image',
+          'Dockerfile uses HMPPS Node.js base image',
+          'pass',
+          `${filename} uses the HMPPS Node.js base image: ${imageRef}`,
+        ),
+      )
+    } else {
+      const baseImages = fromLines
+        .map((l) => l.trim().replace(/^FROM\s+/i, '').split(/\s/)[0])
+        .filter((img) => img && img !== 'scratch')
+        .join(', ')
+      checks.push(
+        result(
+          'dockerfile-base-image',
+          'Dockerfile uses HMPPS Node.js base image',
+          'fail',
+          `${filename} does not use a ghcr.io/ministryofjustice/hmpps-node base image (found: ${baseImages || 'none'}). Use the HMPPS Node.js image to ensure consistent security patching and Node.js version management.`,
+        ),
+      )
+    }
+  }
+}
+
 // ── Output ────────────────────────────────────────────────────────────────────
 
 console.log(JSON.stringify(checks, null, 2))

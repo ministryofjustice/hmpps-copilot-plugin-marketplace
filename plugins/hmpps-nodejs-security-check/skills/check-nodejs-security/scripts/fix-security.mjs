@@ -259,6 +259,13 @@ for (const check of toFix) {
             'Dockerfile changes cannot be applied automatically — the correct placement of .npmrc in a COPY instruction depends on your build stage structure. Add ".npmrc" to the COPY instruction before your npm install step, for example: COPY package*.json .npmrc ./',
         })
         break
+      case 'dockerfile-base-image':
+        skipped.push({
+          id: 'dockerfile-base-image',
+          reason:
+            'Dockerfile base image changes cannot be applied automatically — update the FROM instruction(s) manually to use ghcr.io/ministryofjustice/hmpps-node:24-alpine (or the appropriate variant for your project).',
+        })
+        break
       default:
         skipped.push({ id: check.id, reason: `No automated fix available for check "${check.id}".` })
     }
