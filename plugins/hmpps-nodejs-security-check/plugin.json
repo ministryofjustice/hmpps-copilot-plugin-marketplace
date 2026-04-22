@@ -1,0 +1,11 @@
+{
+  "name": "hmpps-nodejs-security-check",
+  "description": "Skills for auditing Node.js GitHub repositories against HMPPS security standards.",
+  "version": "0.0.1",
+  "author": {
+    "name": "HMPPS Digital",
+    "email": "plugins@hmpps.digital"
+  },
+  "license": "MIT",
+  "keywords": ["security", "audit", "nodejs", "compliance", "github-actions"]
+}
