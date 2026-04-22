@@ -252,6 +252,13 @@ for (const check of toFix) {
       case 'gitignore-env':
         fixGitignore('gitignore-env', '.env')
         break
+      case 'dockerfile-npmrc':
+        skipped.push({
+          id: 'dockerfile-npmrc',
+          reason:
+            'Dockerfile changes cannot be applied automatically — the correct placement of .npmrc in a COPY instruction depends on your build stage structure. Add ".npmrc" to the COPY instruction before your npm install step, for example: COPY package*.json .npmrc ./',
+        })
+        break
       default:
         skipped.push({ id: check.id, reason: `No automated fix available for check "${check.id}".` })
     }

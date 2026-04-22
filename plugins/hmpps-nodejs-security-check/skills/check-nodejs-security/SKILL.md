@@ -25,7 +25,7 @@ Before running checks, determine the target repository:
    ```bash
    git -C <cwd> rev-parse --show-toplevel
    ```
-   Use the output as `REPO_PATH` for all subsequent script calls.
+   Use the output as `REPO_PATH` for all subsequent script calls.add
 
 2. Check whether the repo looks like a Node.js project by verifying that `package.json` exists in the repo root. If it doesn't exist, warn the user:
    > "This directory doesn't appear to be a Node.js project — `package.json` was not found. Security checks may not be meaningful here. Do you want to continue anyway?"

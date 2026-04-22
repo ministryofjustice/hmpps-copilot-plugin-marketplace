@@ -8,7 +8,7 @@
  * Usage: node check-security.mjs [--repo <path>]
  */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { execSync } from 'node:child_process'
 
@@ -384,6 +384,69 @@ if (!gitignoreContent) {
         '.gitignore does not exclude .env files. Add ".env" to .gitignore to prevent accidentally committing secrets.',
       ),
     )
+  }
+}
+
+// 12. Dockerfiles copy .npmrc into the build
+function findDockerfiles(dir) {
+  try {
+    return readdirSync(dir)
+      .filter((f) => f === 'Dockerfile' || f.startsWith('Dockerfile.') || f.endsWith('.dockerfile'))
+      .map((f) => join(dir, f))
+  } catch {
+    return []
+  }
+}
+
+const dockerfiles = findDockerfiles(repoPath)
+
+if (dockerfiles.length === 0) {
+  checks.push(
+    result(
+      'dockerfile-npmrc',
+      'Dockerfile copies .npmrc',
+      'warn',
+      'No Dockerfile found in the repository root. If this project is containerised, ensure .npmrc is copied into the build stage.',
+    ),
+  )
+} else {
+  for (const dockerfilePath of dockerfiles) {
+    const filename = dockerfilePath.split('/').pop()
+    const content = readFile(dockerfilePath)
+    if (!content) continue
+
+    const usesNpm = /\bnpm\s+(install|ci|run)\b/.test(content)
+    const copiesNpmrc = /^COPY\s+[^\n]*\.npmrc/m.test(content)
+
+    if (!usesNpm) {
+      // Dockerfile doesn't run npm at all — not applicable
+      checks.push(
+        result(
+          'dockerfile-npmrc',
+          'Dockerfile copies .npmrc',
+          'warn',
+          `${filename} does not appear to run npm, so .npmrc may not be required. Review manually if npm is invoked indirectly.`,
+        ),
+      )
+    } else if (copiesNpmrc) {
+      checks.push(
+        result(
+          'dockerfile-npmrc',
+          'Dockerfile copies .npmrc',
+          'pass',
+          `${filename} copies .npmrc into the build.`,
+        ),
+      )
+    } else {
+      checks.push(
+        result(
+          'dockerfile-npmrc',
+          'Dockerfile copies .npmrc',
+          'fail',
+          `${filename} runs npm but does not copy .npmrc. Add ".npmrc" to the COPY instruction before your npm install step, for example: COPY package*.json .npmrc ./`,
+        ),
+      )
+    }
   }
 }
 
