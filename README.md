@@ -46,7 +46,7 @@ To remove the marketplace and uninstall these plugins, run:
 | Plugin                                                                                         | Description                                                                                                                                                    |
 | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`hmpps-template-sync`](plugins/hmpps-template-sync/skills/sync-typescript-template/README.md) | Keep your repository in sync with changes from the [hmpps-template-typescript](https://github.com/ministryofjustice/hmpps-template-typescript) shared template |
-| [`hmpps-proxy-aware`](plugins/hmpps-proxy-aware/skills/make-typescript-proxy-aware/SKILL.md)   | Make TypeScript services proxy-aware using HMPPS patterns, including hmpps-rest-client migrations, telemetry updates, and staged Helm rollout support        |
+| [`hmpps-proxy-aware`](plugins/hmpps-proxy-aware/skills/make-typescript-proxy-aware/README.md)   | Make TypeScript services proxy-aware using HMPPS patterns, including hmpps-rest-client migrations, telemetry updates, and staged Helm rollout support        |
 
 ---
 
