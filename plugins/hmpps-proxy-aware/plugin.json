@@ -1,0 +1,11 @@
+{
+  "name": "hmpps-proxy-aware",
+  "description": "Skills for making HMPPS TypeScript applications proxy-aware using standard HMPPS libraries and rollout patterns.",
+  "version": "0.0.1",
+  "author": {
+    "name": "HMPPS Digital",
+    "email": "plugins@hmpps.digital"
+  },
+  "license": "MIT",
+  "keywords": ["typescript", "proxy", "egress", "networking", "hmpps-typescript-lib"]
+}

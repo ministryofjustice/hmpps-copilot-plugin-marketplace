@@ -14,6 +14,12 @@
       "description": "Skills for maintaining and synchronizing our bootstrapped services.",
       "version": "0.0.1",
       "source": "plugins/hmpps-template-sync"
+    },
+    {
+      "name": "hmpps-proxy-aware",
+      "description": "Skills for making HMPPS TypeScript applications proxy-aware using standard HMPPS libraries and rollout patterns.",
+      "version": "0.0.1",
+      "source": "plugins/hmpps-proxy-aware"
     }
   ]
 }
