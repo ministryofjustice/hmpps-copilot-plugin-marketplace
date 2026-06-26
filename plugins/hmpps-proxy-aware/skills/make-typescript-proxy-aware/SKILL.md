@@ -161,6 +161,44 @@ Prefer `@ministryofjustice/hmpps-azure-telemetry` and ensure it initialises befo
 
 If the telemetry file imports logger and logs during shutdown, apply the PR #778-equivalent fix by removing logger dependency from telemetry bootstrap and shutdown path.
 
+### Error handling after migrating from AbstractHmppsRestClient
+
+The old `AbstractHmppsRestClient` used a local `sanitiseError()` helper that set `error.status` to the HTTP status code. The `hmpps-rest-client` `SanitisedError` class uses `error.responseStatus` instead — there is no `error.status` property.
+
+After migrating a client, **any catch block checking `e.status === NNN` will silently stop matching.** The 404 (or other status) check evaluates to `undefined === 404`, so the error is re-thrown rather than handled. These failures only show up at runtime or in integration tests — unit tests typically mock the client completely and don't exercise this path.
+
+**Search for affected patterns after migration:**
+
+```bash
+grep -rn "\.status === [0-9]\|\.status !== [0-9]" server --include="*.ts" | grep -v "test.ts"
+```
+
+Filter out domain-model status checks (for example `attendance.status`, `inmate.status`) — you're looking for catch blocks that test an HTTP response code.
+
+**Fix options:**
+
+1. If the project has a helper like `errorHasStatus(e, status)` or `getErrorStatus(e)`, use it — these typically check both `e.status` and `e.responseStatus`:
+   ```typescript
+   .catch(e => {
+     if (errorHasStatus(e, 404)) return null
+     throw e
+   })
+   ```
+
+2. If no helper exists, check both properties explicitly:
+   ```typescript
+   .catch(e => {
+     if (e.status === 404 || e.responseStatus === 404) return null
+     throw e
+   })
+   ```
+
+3. Alternatively, introduce a small helper and use it consistently:
+   ```typescript
+   const httpStatus = (e: unknown): number | undefined =>
+     (e as { status?: number }).status ?? (e as { responseStatus?: number }).responseStatus
+   ```
+
 ---
 
 ## Step 5: Fallback path for drifted services
@@ -212,6 +250,14 @@ After code and config changes, run validation in the target repo:
 ```bash
 npm run typecheck && npm run lint && npm run test
 ```
+
+Also check for the `error.status` → `error.responseStatus` pattern shift. Run:
+
+```bash
+grep -rn "\.status === [0-9]\|\.status !== [0-9]" server --include="*.ts" | grep -v "test.ts"
+```
+
+Investigate any matches in catch blocks — if they were catching errors from a migrated client, they need updating to use `errorHasStatus` or a dual-check (see Step 4). Unit tests won't catch this; only integration or manual testing will reveal the silent failure.
 
 Then summarise:
 
