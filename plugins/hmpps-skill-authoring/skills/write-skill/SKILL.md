@@ -108,7 +108,7 @@ Only add subfolders that are actually needed — don't create empty scaffolding.
 ```yaml
 ---
 name: skill-name
-description: 'What the skill does and when to use it (10-1024 characters)'
+description: 'What the skill does and when to use it (1-1024 characters)'
 ---
 ```
 
