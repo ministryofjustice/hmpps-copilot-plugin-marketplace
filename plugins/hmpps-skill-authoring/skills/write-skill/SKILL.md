@@ -70,13 +70,21 @@ skill. Use this distinction:
 
 Before writing anything, confirm:
 
-1. **What single task or workflow** does this skill perform? (One purpose per skill — split
-   unrelated tasks into separate skills.)
+1. **What single task or workflow** does this skill perform? Aim for a coherent unit of work:
+   scoped too narrowly, it forces multiple skills to load for one task; scoped too broadly
+   (e.g. bundling unrelated tasks like "query the database" and "administer the database"),
+   it becomes hard for an agent to activate precisely. Split unrelated tasks into separate
+   skills.
 2. **What triggers it?** What phrases, keywords, or user intents should cause an agent to
    invoke this skill automatically?
 3. **What does it produce?** Code changes, a generated file, a report, a git commit, etc.
 4. **Does it need bundled assets** — reference docs, templates, JSON schemas, or scripts —
    to avoid the agent hallucinating formats or conventions?
+5. **What real expertise should this be grounded in?** Prefer project-specific source
+   material over generic knowledge — ask the user for existing runbooks, style guides, API
+   specs, past corrections they've made to an agent, or examples of the task done well. A
+   skill synthesized from real conventions and failure cases outperforms one synthesized from
+   generic "best practices."
 
 **If any of this is unclear or ambiguous, ask the user before proceeding — do not guess.**
 
@@ -89,8 +97,8 @@ Bundle supporting assets in conventional subfolders when useful:
 skills/<skill-name>/
 ├── SKILL.md
 ├── references/       # background docs, patterns, specs
-├── templates/         # starter files to copy/adapt
-└── scripts/            # helper scripts the skill invokes
+├── assets/           # templates, images, data files to copy/adapt
+└── scripts/           # helper scripts the skill invokes
 ```
 
 Only add subfolders that are actually needed — don't create empty scaffolding.
@@ -104,9 +112,15 @@ description: 'What the skill does and when to use it (10-1024 characters)'
 ---
 ```
 
-- **name**: kebab-case, matches the folder name, doubles as the `/command` users can type
-- **description**: the most important field for agent discovery. Write it so an agent reading
-  it alone can decide whether to invoke the skill. Include:
+- **name** _(required)_: kebab-case, matches the folder name, doubles as the `/command` users
+  can type. Constraints from the Agent Skills spec:
+  - 1-64 characters
+  - lowercase alphanumeric characters and hyphens only
+  - must not start or end with a hyphen
+  - must not contain consecutive hyphens (`--`)
+- **description** _(required)_: the most important field for agent discovery. Write it so an
+  agent reading it alone can decide whether to invoke the skill. Must be 1-1024 characters.
+  Include:
   - What the skill accomplishes
   - Concrete trigger phrases / keywords / user intents
   - Avoid vague descriptions
@@ -116,8 +130,21 @@ description: 'What the skill does and when to use it (10-1024 characters)'
 
   ❌ Poor: `'Commit helper'`
 
-- **argument-hint** _(optional, v1.0.64+)_: a short placeholder shown in the slash-command
-  input box, e.g. `argument-hint: 'Enter function or file to test'`
+- **license** _(optional)_: the license applied to the skill — either a license name or a
+  reference to a bundled license file, e.g. `license: Apache-2.0`.
+- **compatibility** _(optional, max 500 characters)_: environment requirements — intended
+  product, required system packages, network access needs, e.g.
+  `compatibility: Requires git, docker, jq, and access to the internet`. Only include this if
+  the skill has specific requirements; most skills don't need it.
+- **metadata** _(optional)_: an arbitrary string key-value map for additional properties not
+  covered by the spec, e.g. `author` or `version`. Use reasonably unique key names to avoid
+  conflicts.
+- **allowed-tools** _(optional, experimental)_: a space-separated string of pre-approved tools
+  the skill may use, e.g. `allowed-tools: Bash(git:*) Bash(jq:*) Read`. Support varies between
+  agent implementations.
+- **argument-hint** _(optional, Copilot CLI extension, v1.0.64+; not part of the Agent Skills
+  spec)_: a short placeholder shown in the slash-command input box, e.g.
+  `argument-hint: 'Enter function or file to test'`
 
 ## Step 4: Write the instructions body
 
@@ -137,30 +164,83 @@ aimed at a human developer:
    `Follow the patterns in [references/testing-patterns.md](references/testing-patterns.md).`
 6. **Use imperative mood throughout**: "Generate unit tests for the selected function", not
    "You should generate some tests".
+7. **Only include what the agent wouldn't already know.** Skip generic explanations (what a
+   PDF is, how HTTP works) and focus on project-specific conventions, non-obvious edge cases,
+   and the particular tools/APIs to use. If the agent would get it right without the
+   instruction, cut it.
+8. **Match specificity to fragility.** Give the agent freedom (and explain *why*) when
+   multiple approaches are valid and the task tolerates variation. Be strictly prescriptive
+   — exact commands, "do not add flags" — when a sequence is fragile or consistency matters.
+9. **Provide a default, not a menu.** When several tools/approaches could work, pick one as
+   the default and mention an alternative briefly, rather than listing them as equal options.
+10. **Favor procedures over declarations.** Teach *how to approach* a class of problem (e.g.
+    "read the schema, join on the `_id` convention, apply filters from the request") rather
+    than hard-coding the answer to one specific instance — so the skill generalizes.
+
+### Useful instruction patterns
+
+Use whichever of these fit the skill — not every skill needs all of them:
+
+- **Gotchas section** — a list of concrete, non-obvious, environment-specific facts the agent
+  would otherwise get wrong (e.g. naming inconsistencies, misleading health checks). Keep
+  these in `SKILL.md` itself so the agent reads them before hitting the situation.
+- **Output templates** — when output must follow a specific format, show a concrete template
+  instead of describing it in prose. Short templates can live inline; longer ones belong in
+  `assets/` and should be referenced by path.
+- **Workflow checklists** — for multi-step workflows with dependencies, give the agent an
+  explicit `- [ ]` checklist to track progress and avoid skipping steps.
+- **Validation loops** — for self-checkable work, instruct: do the work → run a validator
+  (script, checklist, or reference doc) → fix issues → repeat until it passes.
 
 ## Step 5: Add bundled assets (if needed)
 
 - `references/*.md` — background docs, conventions, or specs the agent should follow instead
   of guessing
-- `templates/*` — starter files the agent copies/adapts (code, JSON, config)
+- `assets/*` — templates, images, or data files the agent copies/adapts (code, JSON, config,
+  lookup tables)
 - `scripts/*` — small helper scripts the skill invokes (e.g. `.mjs`/`.sh` files); keep them
   dependency-free where possible and document their invocation in `SKILL.md`
 - Keep each bundled file under 5 MB
+- Reference bundled files with paths one level deep from `SKILL.md` (e.g.
+  `references/REFERENCE.md`, not `references/foo/bar/REFERENCE.md`) — avoid deeply nested
+  reference chains
+
+### Progressive disclosure
+
+Agents load skills in three stages, so structure content to take advantage of this:
+
+1. **Metadata** (~100 tokens) — `name` and `description` are loaded at startup for all skills
+2. **Instructions** (<5000 tokens recommended) — the full `SKILL.md` body loads only once the
+   skill is activated
+3. **Resources** (as needed) — files in `scripts/`, `references/`, or `assets/` load only when
+   the agent needs them
+
+Keep `SKILL.md` under 500 lines. Move detailed or rarely-needed material into separate
+`references/*.md` files rather than inlining everything in the main body.
 
 ## Step 6: Review against the checklist
 
 Before finishing, check the skill against these criteria:
 
 - [ ] One purpose per skill
-- [ ] `name` is kebab-case and matches the folder name
-- [ ] `description` includes trigger keywords and is written for agent discovery, not humans
+- [ ] `name` is kebab-case, ≤64 characters, matches the folder name, and has no leading/
+  trailing or consecutive hyphens
+- [ ] `description` is 1-1024 characters, includes trigger keywords, and is written for agent
+  discovery, not humans
 - [ ] Instructions use imperative mood and are unambiguous
 - [ ] Requirements and guardrails are explicit, not vague
-- [ ] Bundled assets are referenced by relative path where relevant
+- [ ] `SKILL.md` is under 500 lines; detailed material is split into `references/*.md`
+- [ ] Bundled assets are referenced by relative path, one level deep, where relevant
 - [ ] The skill is generic enough to work across different projects/codebases
 - [ ] Bundled files are each under 5 MB
 - [ ] Nothing was guessed or invented where the task, triggers, or output were ambiguous —
   the user was asked instead
+
+If there's an opportunity to run the new skill against a real task, do so and refine the
+instructions based on what actually happens — even one pass of execute-then-revise
+meaningfully improves quality. Pay attention to steps the agent found confusing, instructions
+it ignored, or corrections you had to make; feed those back into the skill (e.g. as a new
+gotcha).
 
 ## Reference examples
 
