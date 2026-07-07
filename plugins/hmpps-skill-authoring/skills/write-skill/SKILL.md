@@ -159,7 +159,7 @@ aimed at a human developer:
    - ❌ "Use whatever testing framework"
    - ✅ "Do not modify existing test files; create new ones"
    - ❌ "Update tests as needed"
-4. **Break complex skills into numbered steps** (analyze → generate → validate, etc.)
+4. **Break complex skills into numbered steps** (analyse → generate → validate, etc.)
 5. **Reference bundled assets by relative path**, e.g.:
    `Follow the patterns in [references/testing-patterns.md](references/testing-patterns.md).`
 6. **Use imperative mood throughout**: "Generate unit tests for the selected function", not
