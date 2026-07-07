@@ -125,7 +125,7 @@ description: 'What the skill does and when to use it (1-1024 characters)'
   - Concrete trigger phrases / keywords / user intents
   - Avoid vague descriptions
 
-  ✅ Good: `'Generate conventional commit messages by analyzing staged git changes and
+  ✅ Good: `'Generate conventional commit messages by analysing staged git changes and
   applying the Conventional Commits specification'`
 
   ❌ Poor: `'Commit helper'`
