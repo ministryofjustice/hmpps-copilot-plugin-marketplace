@@ -173,7 +173,7 @@ aimed at a human developer:
    — exact commands, "do not add flags" — when a sequence is fragile or consistency matters.
 9. **Provide a default, not a menu.** When several tools/approaches could work, pick one as
    the default and mention an alternative briefly, rather than listing them as equal options.
-10. **Favor procedures over declarations.** Teach *how to approach* a class of problem (e.g.
+10. **Favour procedures over declarations.** Teach *how to approach* a class of problem (e.g.
     "read the schema, join on the `_id` convention, apply filters from the request") rather
     than hard-coding the answer to one specific instance — so the skill generalizes.
 
