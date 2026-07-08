@@ -1,0 +1,11 @@
+{
+  "name": "hmpps-skill-authoring",
+  "description": "Skills for authoring high-quality GitHub Copilot skills, following the Agent Skills specification and awesome-copilot best practices.",
+  "version": "0.0.1",
+  "author": {
+    "name": "HMPPS Digital",
+    "email": "plugins@hmpps.digital"
+  },
+  "license": "MIT",
+  "keywords": ["copilot", "skills", "authoring", "meta", "agent-skills"]
+}
