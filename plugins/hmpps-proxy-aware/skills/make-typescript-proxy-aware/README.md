@@ -109,3 +109,5 @@ This skill is designed to help with:
 - **Choose your risk profile.** You can prefer full migration or fallback changes that keep behaviour close to current code.
 - **Staged rollout is supported.** You can apply Helm changes in dev first, then preprod, then prod.
 - **Platform wiring still matters.** App changes alone are not enough if Cloud Platform egress proxy secrets are not available in the namespace.
+- **Bundled reference material.** The skill includes `references/rest-client-migration-pattern.md` (the current canonical `hmpps-template-typescript` client/auth/config pattern) and `references/pr-437-lessons.md` (concrete lessons from a real-world migration, [PR #437](https://github.com/ministryofjustice/hmpps-visits-internal-admin-ui/pull/437)), so Copilot doesn't have to guess library shapes from memory.
+- **Checking out reference repos helps.** If you have `hmpps-typescript-lib` and/or `hmpps-template-typescript` cloned as sibling directories next to your target repo, Copilot will use them directly as the freshest source of truth instead of the bundled snapshots — worth doing if you'll use this skill repeatedly.

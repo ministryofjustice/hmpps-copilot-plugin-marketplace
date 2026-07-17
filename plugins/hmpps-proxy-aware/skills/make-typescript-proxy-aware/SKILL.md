@@ -5,6 +5,7 @@ description: >
   Use this skill when asked to: configure proxy support, fix socket hang up errors after
   egress proxy rollout, migrate superagent or agentkeepalive clients, adopt hmpps-rest-client,
   hmpps-auth-clients, hmpps-monitoring, or hmpps-azure-telemetry, and apply Helm proxy env vars.
+argument-hint: 'Describe the target repo and the migration goal, e.g. "fix socket hang up errors after proxy rollout"'
 ---
 
 # Make TypeScript Proxy-Aware
@@ -18,6 +19,18 @@ It focuses on proven HMPPS patterns from:
 - `hmpps-tech-docs/src/content/how-to-guides/retrofitting-egress-controls-with-envoy-proxy.md`
 
 Use this skill when a service needs to route outbound HTTPS traffic through an Envoy forward proxy, especially when errors like `socket hang up` appear after proxy rollout.
+
+## When to Use This Skill
+
+Trigger this skill when the user asks you to:
+
+- Make a service or repo proxy-aware for Cloud Platform egress controls
+- Diagnose or fix `socket hang up` (or similar connection reset) errors that started after an Envoy proxy rollout
+- Migrate outbound HTTP clients away from raw `superagent` or `agentkeepalive` usage
+- Adopt or upgrade `@ministryofjustice/hmpps-rest-client`, `hmpps-auth-clients`, `hmpps-monitoring`, or `hmpps-azure-telemetry`
+- Add or stage proxy environment variables (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) in Helm values
+
+Do not use this skill for unrelated Helm changes, general dependency upgrades, or non-HMPPS TypeScript services — it assumes HMPPS template conventions and Cloud Platform egress controls.
 
 ---
 
@@ -45,6 +58,14 @@ By the end of this skill, the target app should:
 3. Confirm it looks like a deployable HMPPS app (for example `helm_deploy/` exists). If not, warn the user and ask whether to continue.
 
 4. Check whether the namespace has the Envoy proxy secret wired from Cloud Platform egress controls. If missing, explain that app-level changes alone are not enough.
+
+5. Check whether `hmpps-typescript-lib` and/or `hmpps-template-typescript` are checked out as sibling directories next to the target repo (for example `../hmpps-typescript-lib`, `../hmpps-template-typescript`). These are the canonical source of the patterns this skill applies:
+   - **If found:** read the real source there directly for anything version-specific (exact exported API, current file layout, latest example client) instead of relying on memory or bundled snippets — it's the freshest possible source of truth.
+   - **If not found:** tell the user that cloning these two repos as siblings would let you cross-reference the canonical pattern directly, and ask if they'd like to do that now. If they'd rather not, continue anyway using `references/rest-client-migration-pattern.md` (a distilled snapshot of the current template pattern), and fetch specific files on demand when you need to verify something precisely, for example:
+     ```bash
+     gh api repos/ministryofjustice/hmpps-template-typescript/contents/server/data/exampleApiClient.ts --jq '.content' | base64 -d
+     ```
+   - Either way, do not assume the bundled snapshot is exhaustive — it covers the core client/auth/config pattern only.
 
 ---
 
@@ -117,13 +138,15 @@ In no-upgrade mode, install the minimum proxy-aware version needed for the missi
 
 Always explain expected behavioural impact before major migrations.
 
+Before writing code against any of these libraries, check the actual installed version and its real exported API (for example `node_modules/@ministryofjustice/<package>/dist` or its `README.md`, or `npm view <package> versions`) rather than assuming a shape from memory — these packages evolve and older guidance may not match the installed version.
+
 ---
 
 ## Step 4: Migrate outbound HTTP clients
 
 ### Preferred path
 
-For most API calls, migrate clients to `@ministryofjustice/hmpps-rest-client` and align with `hmpps-template-typescript` patterns.
+For most API calls, migrate clients to `@ministryofjustice/hmpps-rest-client` and align with `hmpps-template-typescript` patterns. Follow [references/rest-client-migration-pattern.md](references/rest-client-migration-pattern.md) for the exact current shape of an API client, its wiring in `server/data/index.ts`, and the `handleNotFoundErrorAsNull` pattern for typed 404 handling — do not guess the constructor signature or call shape from memory.
 
 Use this decision rule before migrating any legacy client:
 
@@ -148,6 +171,9 @@ For legacy clients named like `AuthenticationClient` or `manageUsersApiClient`, 
 - If it handles HMPPS Auth or token verification responsibilities, migrate to the relevant `@ministryofjustice/hmpps-auth-clients` client.
 - Do not create a new direct `hmpps-rest-client` implementation for those auth responsibilities.
 - Only keep a custom `hmpps-rest-client` client where the endpoint is outside the coverage of `hmpps-auth-clients`, and explain why.
+- If the client only fetches current-user display data (name, roles, caseload), check first whether that data is already available from decoding the user's JWT elsewhere in the app (for example in `setUpCurrentUser`/`populateCurrentUser`). If so, prefer removing the client and its call sites entirely over migrating it — see the `manageUsersApiClient` case in [references/pr-437-lessons.md](references/pr-437-lessons.md).
+
+Any local `AgentConfig`/`ApiConfig` type definitions in `config.ts` should be replaced with the equivalents imported from `@ministryofjustice/hmpps-rest-client`, and any config field renames this implies (for example `apiClientId` → `authClientId`, `domain` → `ingressUrl`) should be searched for and updated at every call site, not just in `config.ts` — see [references/pr-437-lessons.md](references/pr-437-lessons.md).
 
 ### Health and ping flows
 
@@ -232,6 +258,19 @@ After successful migration, offer to update internal guidance when needed:
 
 Only update docs when the user asks. Keep docs aligned with what this skill now supports.
 
+Also offer to write or update the target repo's own `.github/copilot-instructions.md`, summarising the new client/auth/config patterns (controller → service → API client layering, how tokens are obtained via `asSystem()`/`asUser()`, where config renames landed) so future Copilot-assisted changes to that repo don't drift back to the pre-migration approach. Only do this if the user agrees. See the worked example in [references/pr-437-lessons.md](references/pr-437-lessons.md).
+
+---
+
+## Lessons from a real migration (PR #437)
+
+[hmpps-visits-internal-admin-ui PR #437](https://github.com/ministryofjustice/hmpps-visits-internal-admin-ui/pull/437) is a real, Copilot-assisted migration from a drifted service to the current `hmpps-template-typescript` pattern. Full lessons are in [references/pr-437-lessons.md](references/pr-437-lessons.md); the headlines are:
+
+- Bespoke `restClient.ts`, `hmppsAuthClient.ts`, `tokenVerification.ts`, and `tokenStore/*.ts` files were deleted outright, not refactored in place, once the library equivalents were wired up.
+- A `manageUsersApiClient` used only for current-user display data was removed entirely, because that data was already available from the user's JWT — not migrated onto `hmpps-auth-clients`.
+- Config renames (`apiClientId` → `authClientId`, `domain` → `ingressUrl`) rippled beyond `config.ts` into `setUpAuthentication.ts` and auth URL construction.
+- Stale Helm values for deleted clients (unused API URLs, an unnecessary blank line) were cleaned up as part of the same change, not left behind.
+
 ---
 
 ## Notes and guardrails
@@ -241,3 +280,16 @@ Only update docs when the user asks. Keep docs aligned with what this skill now 
 - Do not assume all services match template structure.
 - Ask before introducing behavioural changes that may affect retries, timeouts, or auth semantics.
 - Keep migration incremental when requested: dev first, then preprod, then prod.
+
+---
+
+## Gotchas
+
+- **`socket hang up` after rollout usually means an agent bypasses the proxy.** Look for `agentkeepalive` or custom `https.Agent`/`http.Agent` instances created outside `hmpps-rest-client` — these often ignore `HTTP_PROXY`/`HTTPS_PROXY` entirely.
+- **`NODE_USE_ENV_PROXY: "1"` is required, not optional**, for Node's built-in `undici`/`fetch`-based clients to honour proxy env vars — services relying solely on library-level proxy support without this flag can still bypass the proxy for some requests.
+- **Telemetry must initialise before logger use (PR #778 pattern).** If a telemetry bootstrap file imports the app logger and logs during shutdown, that import order can suppress or break telemetry — remove the logger dependency from telemetry bootstrap and shutdown paths.
+- **Auth-shaped clients aren't always auth clients.** A class named `AuthenticationClient` or `manageUsersApiClient` may still be a general REST client — classify by the endpoint it calls (HMPPS Auth/token verification vs. domain API), not by its name, before deciding whether it belongs in `hmpps-auth-clients` or `hmpps-rest-client`.
+- **Missing package is not a reason to fall back.** Default to installing the proxy-aware HMPPS package and reassessing risk, rather than writing custom fallback code, unless the user explicitly accepts the compatibility trade-off.
+- **App-level changes alone don't fix `socket hang up` errors.** Confirm the namespace has the Cloud Platform Envoy proxy secret wired up (Step 0) — without it, code changes have no effect.
+- **A "user info" API client may already be redundant.** Before migrating a client that only fetches the current user's name/roles/caseload, check whether that data is already decoded from the user's JWT elsewhere (see the `manageUsersApiClient` removal in [references/pr-437-lessons.md](references/pr-437-lessons.md)) — deleting the client can be the correct outcome, not migrating it.
+- **Bundled reference snippets can go stale.** `references/rest-client-migration-pattern.md` is a snapshot; prefer reading `hmpps-typescript-lib`/`hmpps-template-typescript` directly (sibling checkout or `gh api`) whenever precision matters, per Step 0.
