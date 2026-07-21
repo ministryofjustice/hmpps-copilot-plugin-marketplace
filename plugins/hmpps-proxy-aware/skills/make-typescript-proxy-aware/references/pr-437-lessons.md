@@ -48,18 +48,6 @@ Adopting `AuthenticationClient` requires config shape changes that touch call si
 etc.) after renaming in `config.ts` — `setUpAuthentication.ts` and any auth URL construction are
 easy to miss and will silently use `undefined` if not updated.
 
-## `ENVIRONMENT_NAME` no longer needs app-side translation
-
-The app previously had a `translateEnvironment()` function mapping `preprod` → `PRE-PRODUCTION`,
-`prod` → `''`, and uppercasing everything else. This was deleted; the Helm values files for each
-environment now set the already-correct display string directly (for example
-`ENVIRONMENT_NAME: PRE-PRODUCTION` in `values-preprod.yaml`, and no value at all for prod).
-
-**Lesson:** if a target app has similar app-side string-translation logic for environment name
-(or other Helm-supplied values), consider pushing the translation into the per-environment Helm
-values file instead of keeping code-side branching — check `hmpps-template-typescript`'s
-`values-*.yaml` files for the expected literal values per environment.
-
 ## `handleNotFoundErrorAsNull` replaces try/catch-on-404
 
 Several client methods previously wrapped a call in try/catch and returned `null` on
