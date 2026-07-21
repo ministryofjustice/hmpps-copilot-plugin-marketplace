@@ -125,9 +125,10 @@ Ask which phases to run, and the strategy for each phase the user selects. Prese
    - **Alternative:** upgrade only to minimum proxy-aware versions
    - **Alternative:** keep current library versions and use targeted fallback changes only
 
-2. **Helm env-var rollout mode**
-   - Add proxy env vars in `helm_deploy/values.yaml` (all environments)
-   - Stage by environment: `values-dev.yaml`, then `values-preprod.yaml`, then `values-prod.yaml`
+2. **Helm env-var rollout mode** (dev-first by default)
+   - **Default:** Add proxy env vars to `helm_deploy/values-dev.yaml` only, validate Phase 1 in dev, then ask before rolling out further
+   - **Alternative:** Add to `values.yaml` (all environments) only if the user explicitly requests it
+   - **If rolling out:** After dev validation, stage to `values-preprod.yaml`, then `values-prod.yaml` — each as a separate, tested commit
 
 3. **Scope of code migration**
    - Full migration to HMPPS libraries where possible
@@ -151,7 +152,10 @@ At the end of every phase below, repeat this checkpoint before moving to the nex
    ```
    chore: adopt @ministryofjustice/hmpps-rest-client for outbound HTTP clients (proxy-aware Phase 1)
    ```
-4. Ask the user whether to continue to the next phase now, stop here, or pause so they can review/ship this phase first. Do not start the next phase without confirmation.
+4. If this is Phase 1 and Helm changes were applied to `values-dev.yaml`, ask the user:
+   - "Phase 1 code changes are validated in dev. Do you want me to apply the same Helm proxy env vars to `values-preprod.yaml` and `values-prod.yaml` now, or wait?"
+   - Only proceed with rolling out Helm changes to preprod/prod if the user explicitly confirms.
+5. Ask the user whether to continue to the next phase now, stop here, or pause so they can review/ship this phase first. Do not start the next phase without confirmation.
 
 ---
 
@@ -182,7 +186,7 @@ Prioritise replacing:
 
 ### Apply Helm proxy configuration
 
-Add proxy env configuration using the rollout mode chosen in Step 2. For TypeScript services, use this standard pattern:
+Add proxy env configuration to **`helm_deploy/values-dev.yaml` only** at this stage. For TypeScript services, use this standard pattern:
 
 ```yaml
 generic-service:
@@ -199,9 +203,12 @@ generic-service:
       no_proxy: "NO_PROXY"
 ```
 
-If only staged env files are chosen, apply first to dev unless the user requests otherwise.
+Add only to `values-dev.yaml` — do not apply to `values-preprod.yaml`, `values-prod.yaml`, or the shared `values.yaml` unless the user explicitly asks for it after dev validation.
 
-Run the **Phase checkpoint pattern** before moving on. If the user only wanted proxy-awareness, stop here — Phases 2–4 are optional deeper alignment.
+Run the **Phase checkpoint pattern** before moving on. After dev validation passes:
+
+- If the user only wanted proxy-awareness, stop here — Phases 2–4 are optional deeper alignment.
+- **Before rolling out to preprod/prod:** ask the user whether to apply the same Helm change to `values-preprod.yaml` and `values-prod.yaml`. Do not assume a staged rollout unless the user confirms each stage. If they want a full rollout, treat each environment as a separate commit (dev first, validated; then preprod, validated; then prod).
 
 ---
 
@@ -308,7 +315,7 @@ This skill breaks that same scope into four separately-reviewable phases rather 
 - Use fallback changes when migration risk is high or behaviour must remain stable.
 - Do not assume all services match template structure.
 - Ask before introducing behavioural changes that may affect retries, timeouts, or auth semantics.
-- Keep migration incremental when requested: dev first, then preprod, then prod.
+- Keep migration incremental: **default to dev-only unless the user explicitly asks for more environments.** After dev validation, ask before rolling out to preprod/prod.
 - Keep each phase in its own commit, validated independently, so the user can review and ship one phase before deciding whether to continue to the next.
 - Stay within the infrastructure scope (see "Scope boundary" in Outcome) — do not extend phases into business logic, routes, or views.
 
@@ -318,6 +325,7 @@ This skill breaks that same scope into four separately-reviewable phases rather 
 
 - **`socket hang up` after rollout usually means an agent bypasses the proxy.** Look for `agentkeepalive` or custom `https.Agent`/`http.Agent` instances created outside `hmpps-rest-client` — these often ignore `HTTP_PROXY`/`HTTPS_PROXY` entirely.
 - **`NODE_USE_ENV_PROXY: "1"` is required, not optional**, for Node's built-in `undici`/`fetch`-based clients to honour proxy env vars — services relying solely on library-level proxy support without this flag can still bypass the proxy for some requests.
+- **Always ask before rolling out Helm changes beyond dev.** Even if the user wants all four code phases, still apply Helm env vars to dev-only first, validate Phase 1 there, then explicitly ask before copying those changes to preprod and prod. This prevents accidental environment-wide rollouts.
 - **Telemetry must initialise before logger use (PR #778 pattern).** If a telemetry bootstrap file imports the app logger and logs during shutdown, that import order can suppress or break telemetry — remove the logger dependency from telemetry bootstrap and shutdown paths.
 - **Auth-shaped clients aren't always auth clients.** A class named `AuthenticationClient` or `manageUsersApiClient` may still be a general REST client — classify by the endpoint it calls (HMPPS Auth/token verification vs. domain API), not by its name, before deciding whether it belongs in `hmpps-auth-clients` or `hmpps-rest-client`.
 - **Missing package is not a reason to fall back.** Default to installing the proxy-aware HMPPS package and reassessing risk, rather than writing custom fallback code, unless the user explicitly accepts the compatibility trade-off.
