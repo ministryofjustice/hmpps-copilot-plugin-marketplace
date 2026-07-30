@@ -105,6 +105,7 @@ Search for patterns that usually break with proxy rollout, and for infrastructur
 10. Legacy auth-oriented API clients built on shared base classes (for example `abstractHmppsRestClient`) such as `manageUsersApiClient` or `AuthenticationClient` that should map to `@ministryofjustice/hmpps-auth-clients`
 11. Config field names that predate `hmpps-auth-clients`/`hmpps-rest-client` (for example `apiClientId`/`apiClientSecret` instead of `authClientId`/`authClientSecret`, or `domain` instead of `ingressUrl`) — see [references/pr-437-lessons.md](references/pr-437-lessons.md)
 12. Locally-defined `AgentConfig`/`ApiConfig` types in `config.ts` that duplicate the ones exported by `@ministryofjustice/hmpps-rest-client`
+13. `new SQSClient(...)` usage — an AWS SDK client constructed directly, which does not respect proxy environment variables. Most often found in a client related to the HMPPS Audit service (for example `auditClient.ts`/`HmppsAuditClient`), but can appear anywhere the app talks to SQS directly. See [references/sqs-client-migration-pattern.md](references/sqs-client-migration-pattern.md) for how to resolve it.
 
 Summarise findings for the user, grouped by:
 
@@ -183,6 +184,18 @@ Prioritise replacing:
 
 - Direct `superagent` request construction
 - `agentkeepalive` agent creation in app client code
+
+### Migrate direct `new SQSClient` usage
+
+If Step 1 found a directly-constructed `new SQSClient(...)`, follow this decision tree rather than assuming one fix applies everywhere — see [references/sqs-client-migration-pattern.md](references/sqs-client-migration-pattern.md) for full detail:
+
+1. **Check whether the usage relates to audit** — is it in a client named like `auditClient`/`HmppsAuditClient`, or otherwise wired up to send events to the HMPPS Audit service? If unclear, ask the user.
+2. **If it relates to audit:** check whether `hmpps-typescript-lib`'s `main` branch (and npm) now has a published `audit-client` package.
+   - **If yes:** migrate the app to import `@ministryofjustice/hmpps-audit-client` (confirm the exact published package name) instead of constructing `SQSClient` directly — this package is proxy-aware. Check the package has actually been published to npm (not just merged to `main`), and upgrade the app to at least that version before importing from it.
+   - **If no (not yet published):** apply the local fallback pattern instead (see below) — do not block the phase waiting for the upstream package.
+3. **If it's unrelated to audit, or the `audit-client` package doesn't exist yet:** implement the proxy-aware `NodeHttpHandler` + `HttpsProxyAgent` fallback pattern directly in the target repo, scoped to its own SQS client file.
+
+Whichever path is used, this is still Phase 1 work — it fixes proxy connectivity for SQS traffic the same way the outbound HTTP client migration does.
 
 ### Apply Helm proxy configuration
 
