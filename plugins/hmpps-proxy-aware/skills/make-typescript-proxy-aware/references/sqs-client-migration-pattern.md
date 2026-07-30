@@ -33,6 +33,15 @@ This is the same shape PR #211 added inside `hmpps-typescript-lib`'s `audit-clie
 replicate it locally when importing the shared package isn't yet an option. Requires
 `@smithy/node-http-handler` and `https-proxy-agent` as dependencies.
 
+**Pin `https-proxy-agent` to `^7.0.0`, not the latest major.** From v6 onward `https-proxy-agent` is
+published as ESM-only (`"type": "module"` in its `package.json`), which breaks Jest under `ts-jest`
+(CommonJS) with an error like `Cannot use import statement outside a module` pointing at
+`https-proxy-agent/dist/index.js`, even though `npm install`, `npm run build`, and `npm run
+typecheck`/`lint` all succeed. This surfaces only when running tests, so don't assume the package
+is fine just because the app compiles. `^7.0.0` is the last CommonJS-compatible major and is what
+`hmpps-typescript-lib`'s own `audit-client` package pins to — use it here too even if the phase's
+library-upgrade mode is "latest".
+
 `proxySupport.ts` (place alongside the SQS client file, for example `server/data/helpers/proxySupport.ts`):
 
 ```typescript
