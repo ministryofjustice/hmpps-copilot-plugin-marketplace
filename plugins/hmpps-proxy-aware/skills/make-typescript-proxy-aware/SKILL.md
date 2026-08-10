@@ -105,7 +105,7 @@ Search for patterns that usually break with proxy rollout, and for infrastructur
 10. Legacy auth-oriented API clients built on shared base classes (for example `abstractHmppsRestClient`) such as `manageUsersApiClient` or `AuthenticationClient` that should map to `@ministryofjustice/hmpps-auth-clients`
 11. Config field names that predate `hmpps-auth-clients`/`hmpps-rest-client` (for example `apiClientId`/`apiClientSecret` instead of `authClientId`/`authClientSecret`, or `domain` instead of `ingressUrl`) — see [references/pr-437-lessons.md](references/pr-437-lessons.md)
 12. Locally-defined `AgentConfig`/`ApiConfig` types in `config.ts` that duplicate the ones exported by `@ministryofjustice/hmpps-rest-client`
-13. `new SQSClient(...)` usage — an AWS SDK client constructed directly, which does not respect proxy environment variables. Most often found in a client related to the HMPPS Audit service (for example `auditClient.ts`/`HmppsAuditClient`), but can appear anywhere the app talks to SQS directly. See [references/sqs-client-migration-pattern.md](references/sqs-client-migration-pattern.md) for how to resolve it.
+13. `new SQSClient(...)` usage — an AWS SDK client constructed directly, which does not respect proxy environment variables. Most often found in a client related to the HMPPS Audit service (for example `auditClient.ts`/`HmppsAuditClient`), but can appear anywhere the app talks to SQS directly. If it's audit-related, this is now always resolved by adopting `@ministryofjustice/hmpps-audit-client` `2.0.0-beta.1` or later (proxy-aware from major version 2.0 onwards) rather than a bespoke fallback — see [references/sqs-client-migration-pattern.md](references/sqs-client-migration-pattern.md) for how to resolve it.
 
 Summarise findings for the user, grouped by:
 
@@ -194,11 +194,13 @@ Prioritise replacing:
 
 If Step 1 found a directly-constructed `new SQSClient(...)`, follow this decision tree rather than assuming one fix applies everywhere — see [references/sqs-client-migration-pattern.md](references/sqs-client-migration-pattern.md) for full detail:
 
-1. **Check whether the usage relates to audit** — is it in a client named like `auditClient`/`HmppsAuditClient`, or otherwise wired up to send events to the HMPPS Audit service? If unclear, ask the user.
-2. **If it relates to audit:** check whether `hmpps-typescript-lib`'s `main` branch (and npm) now has a published `audit-client` package.
-   - **If yes:** migrate the app to import `@ministryofjustice/hmpps-audit-client` (confirm the exact published package name) instead of constructing `SQSClient` directly — this package is proxy-aware. Check the package has actually been published to npm (not just merged to `main`), and upgrade the app to at least that version before importing from it.
-   - **If no (not yet published):** apply the local fallback pattern instead (see below) — do not block the phase waiting for the upstream package.
-3. **If it's unrelated to audit, or the `audit-client` package doesn't exist yet:** implement the proxy-aware `NodeHttpHandler` + `HttpsProxyAgent` fallback pattern directly in the target repo, scoped to its own SQS client file.
+1. **Check whether the usage relates to audit** — is it in a client named like `auditClient`/`HmppsAuditClient`, or otherwise wired up to send events to the HMPPS Audit service's SQS queues? If unclear, ask the user.
+2. **If it relates to audit: always adopt `@ministryofjustice/hmpps-audit-client`, never the local fallback pattern.** This package is only proxy-aware from major version **2.0** onwards — check the installed/available version, don't just check the package exists:
+   - **Minimum viable today:** `2.0.0-beta.1` (the first proxy-aware release, published to npm but not yet promoted to the `latest` dist-tag — you must pin the version explicitly, for example `npm install @ministryofjustice/hmpps-audit-client@2.0.0-beta.1`, a plain `npm install @ministryofjustice/hmpps-audit-client` will install the older non-proxy-aware `1.x` line).
+   - **Preferred once available:** if a full (non-beta) `2.x` release has since been published (`npm view @ministryofjustice/hmpps-audit-client versions`), install that instead of the beta.
+   - Follow the current constructor/import shape from [hmpps-contacts-ui PR #851](https://github.com/ministryofjustice/hmpps-contacts-ui/pull/851) (`import { AuditClient } from '@ministryofjustice/hmpps-audit-client'`, constructed as `new AuditClient(config.sqs.audit, logger)`) rather than assuming the old local `HmppsAuditClient` shape — verify against the installed package's own types/README since the constructor signature may still evolve pre-1.0-of-major-2.
+   - Remove the app's local `SQSClient`/`HmppsAuditClient` construction, its bespoke proxy-handling code, and any now-unused direct `@aws-sdk/client-sqs`/`aws-sdk-client-mock` dependencies once the import is wired up.
+3. **If it's unrelated to audit** (some other, non-audit SQS queue): implement the proxy-aware `NodeHttpHandler` + `HttpsProxyAgent` fallback pattern directly in the target repo, scoped to its own SQS client file — see the fallback pattern in the reference doc.
 
 Whichever path is used, this is still Phase 1 work — it fixes proxy connectivity for SQS traffic the same way the outbound HTTP client migration does.
 
