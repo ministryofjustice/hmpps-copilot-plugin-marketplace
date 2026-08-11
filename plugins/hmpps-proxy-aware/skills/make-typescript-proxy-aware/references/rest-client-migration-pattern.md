@@ -78,6 +78,41 @@ async getThing(id: string): Promise<Thing | null> {
 }
 ```
 
+**`stream()` has no `errorHandler` param — only `errorLogger`.** If the old client had custom
+fallback behaviour on a streamed response (for example returning a placeholder image on a 404),
+it can't be replicated via a `handleError`-style callback the way `get`/`post` can. Wrap the
+`stream()` call in a try/catch instead and inspect `(error as SanitisedError).responseStatus`.
+
+### `.status` → `.responseStatus`: check the whole app, not just the client file
+
+The library's `SanitisedError` exposes `.responseStatus`, whereas many drifted services have an
+older local `SanitisedError` type with a `.status` field that the same app's routes, services, and
+tests read directly (for example `if (error.status === 409) { ... }` to detect a duplicate-record
+conflict, or a global Express `errorHandler.ts` checking `error.status === 401`). Swapping in the
+library's `RestClient` silently changes this field name for every error that bubbles up from a
+migrated client — this is a real behavioural change, not just a type error, and `tsc` will only
+catch it where the error type is explicitly typed as the old `SanitisedError`.
+
+After migrating clients in Phase 1:
+
+1. Grep the whole app (routes, services, middleware — not just the client files) for `.status`
+   reads on caught/thrown errors, and update the ones that originate from migrated API clients to
+   `.responseStatus`.
+2. Treat the top-level Express error handler specially: it usually receives both `http-errors`
+   -style errors (which use `.status`, e.g. from `createError.Conflict()` or an unmatched route)
+   and, post-migration, `SanitisedError`s from migrated clients (which use `.responseStatus`).
+   Check both, for example `error.status ?? error.responseStatus`, rather than rewriting it to
+   `.responseStatus` only.
+3. Update any tests that mock errors via `http-errors` factories (`createError.Conflict()`, `new
+   BadRequest()`, etc.) as a stand-in for "an API error with this status code" — these only set
+   `.status`, so after the migration they silently stop exercising the intended branch unless the
+   mock also carries `.responseStatus`, for example:
+   ```typescript
+   contactsService.updateContactIdentity.mockRejectedValue(
+     Object.assign(createError.Conflict(), { responseStatus: 409 }),
+   )
+   ```
+
 ---
 
 ## Wiring (`server/data/index.ts`)
@@ -145,6 +180,12 @@ export default function setupAuthentication() {
   return router
 }
 ```
+
+**Drifted services often split this across separate files** (for example a `server/authentication/auth.ts` holding the passport strategy and a generic `authenticationMiddleware(tokenVerifier)` wrapper, plus a `server/middleware/setUpCurrentUser.ts` that supplies the verifier), rather than the template's single merged `setUpAuthentication.ts`. In that shape:
+
+- Update the local `TokenVerifier` type (wherever it's currently imported from a bespoke `tokenVerification.ts`) to `(request: AuthenticatedRequest) => Promise<boolean>`, importing `AuthenticatedRequest` from `@ministryofjustice/hmpps-auth-clients` instead.
+- Construct the `VerificationClient` where the router is built (for example in `setUpCurrentUser.ts`) and pass `request => verificationClient.verifyToken(request)` into the existing `authenticationMiddleware` wrapper — the wrapper itself still does the `req as unknown as AuthenticatedRequest` cast before calling the verifier.
+- This is a smaller, lower-risk change than restructuring the files to match the template's single-file layout — that kind of file-layout consolidation belongs in Phase 3 (or `sync-typescript-template`) if the user wants it, not Phase 2.
 
 ---
 
