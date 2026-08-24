@@ -79,7 +79,7 @@ class DocsChangeTrackingTest {
         else -> emptyList()
       }
     }
-    .sortedBy { it.relativeTo(repoRoot).path }
+    .sortedBy { it.relativeTo(repoRoot).invariantSeparatorsPath }
 
   private fun hashOf(files: List<File>): String {
     val digest = MessageDigest.getInstance("MD5")
