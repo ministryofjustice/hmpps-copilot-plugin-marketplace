@@ -51,7 +51,7 @@ For reference, `DocsChangeTrackingTest` (in Kotlin) performs this computation:
 private fun hashOf(files: List<File>): String {
   val digest = MessageDigest.getInstance("MD5")
   files.forEach { file ->
-    digest.update(file.relativeTo(repoRoot).path.toByteArray(Charsets.UTF_8))
+    digest.update(file.relativeTo(repoRoot).invariantSeparatorsPath.toByteArray(Charsets.UTF_8))
     digest.update(0)
     digest.update(file.readBytes())
   }
