@@ -54,7 +54,7 @@ class DocsChangeTrackingTest {
         "Entry '${entry.id}' in $REGISTRY_FILE has no resolvable source files (checked: " +
           "${entry.sources}). Update the entry's 'sources' list.",
       )
-      .isNotEmpty
+      .isNotEmpty()
 
     val actualHash = hashOf(sourceFiles)
 
