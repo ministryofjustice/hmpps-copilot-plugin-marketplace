@@ -34,7 +34,7 @@ Then add each resolved file path to the `paths` list in the one-liner above.
 
 If you're uncertain about the computation:
 
-1. Put in a deliberately wrong hash value (e.g., `hash: 0000000000000000000000000000000`)
+1. Put in a deliberately wrong hash value (e.g., `hash: 00000000000000000000000000000000`)
 2. Run:
    ```bash
    ./gradlew test --tests "*DocsChangeTrackingTest*"
