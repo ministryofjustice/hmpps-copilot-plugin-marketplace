@@ -74,7 +74,7 @@ Then structure the rest:
 - **Prefer plain nouns/verbs** over jargon: "the date someone is due to be released", not "CRD field". Introduce the abbreviation (e.g. "conditional release date (CRD)") once in the glossary, then it's fine to reuse sparingly
 - **Use short paragraphs and bullet lists** over long prose; use tables for fixed enumerable sets of options
 - **State rules as plain conditions** ("if X and Y, then Z") rather than describing control flow
-- **Don't editorialize** or add caveats not in the code (no "this seems inefficient") — be a faithful, neutral mirror of current logic
+- **Don't editorialise** or add caveats not in the code (no "this seems inefficient") — be a faithful, neutral mirror of current logic
 - **Bold sparingly** — only for genuinely key terms/dates/outcomes on first use in a section
 - **Avoid absolute claims** not guaranteed by code (e.g. don't say "always" if there's a config flag that can disable it)
 
