@@ -65,7 +65,7 @@ class DocsChangeTrackingTest {
           "Please review the documentation at '${entry.doc}', update it if the business " +
           "rules changed, then update the entry in $REGISTRY_FILE to:\n" +
           "    hash: $actualHash.\n" +
-          "Please also ensure any changes are reflected in implementation notes in confluence.",
+          "Please also ensure any changes are reflected in implementation notes in Confluence.",
       )
       .isEqualTo(entry.hash)
   }
