@@ -26,6 +26,12 @@
       "description": "Skills for authoring high-quality GitHub Copilot skills, following the Agent Skills specification and awesome-copilot best practices.",
       "version": "0.0.1",
       "source": "plugins/hmpps-skill-authoring"
+    },
+    {
+      "name": "hmpps-business-logic-docs",
+      "description": "Skills for documenting and maintaining plain-English business logic documentation, with automated freshness tracking via test hashes.",
+      "version": "0.1.0",
+      "source": "plugins/hmpps-business-logic-docs"
     }
   ]
 }

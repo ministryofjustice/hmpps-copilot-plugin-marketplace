@@ -1,0 +1,11 @@
+{
+  "name": "hmpps-business-logic-docs",
+  "description": "Skills for documenting and maintaining plain-English business logic documentation, with automated freshness tracking via test hashes.",
+  "version": "0.1.0",
+  "author": {
+    "name": "HMPPS Digital",
+    "email": "plugins@hmpps.digital"
+  },
+  "license": "MIT",
+  "keywords": ["documentation", "business-logic", "plain-language", "kotlin", "testing"]
+}
