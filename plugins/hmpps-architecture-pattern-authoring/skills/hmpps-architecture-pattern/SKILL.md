@@ -12,7 +12,7 @@ description: >
 > **Note:** This skill is designed for use in the `hmpps-architecture-patterns` repository.
 > The file path `source/documentation/patterns/` is specific to that repo.
 
-HMPPS Digital aligns the technical approach of delivery teams by providing guidance in the form of architecture patterns. Architecture patterns should strictly follow the guidelines for the 'explanation' sector of the [Diataxis framework](https://diataxis.fr/explanation/).
+HMPPS Digital aligns the technical approach of delivery teams by providing guidance in the form of technical architecture patterns. Technical architecture patterns are similar to the patterns-based approach used by Christopher Alexander in the book 'A Pattern Language'. Text in the HMPPS technical architecture patterns should strictly follow the guidelines for the 'explanation' sector of the [Diataxis framework](https://diataxis.fr/explanation/).
 
 ## When to use this skill
 
