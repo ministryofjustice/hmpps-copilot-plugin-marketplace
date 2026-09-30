@@ -1,0 +1,11 @@
+{
+  "name": "hmpps-architecture-pattern",
+  "description": "Skills for authoring HMPPS Digital architecture patterns.",
+  "version": "0.0.1",
+  "author": {
+    "name": "HMPPS Digital",
+    "email": "plugins@hmpps.digital"
+  },
+  "license": "MIT",
+  "keywords": ["documentation", "architecture"]
+}
