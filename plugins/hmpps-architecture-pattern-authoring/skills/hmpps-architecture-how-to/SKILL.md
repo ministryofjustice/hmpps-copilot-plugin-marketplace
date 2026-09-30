@@ -42,9 +42,8 @@ Gather the following, asking clarifying questions as needed. Do not guess — if
 3. **Audience and assumed knowledge** — Who is this for (e.g. a delivery team engineer)? What must they already know or have in place before starting?
 4. **Prerequisites** — Accounts, access, tools, running services, or prior setup the reader needs before step 1
 5. **Patterns being composed** — Which existing HMPPS architecture patterns does this guide draw on? List them by name so they can be cross-linked. If a required pattern does not yet exist, flag it.
-6. **Steps** — The ordered sequence of actions the reader must take. Each step should be a single, verifiable action.
+6. **Steps** — The ordered sequence of actions the reader must take. Each step should be a single action.
 7. **Decision points** — Any "if X, do Y; otherwise do Z" branches the reader will hit
-8. **Verification** — How the reader confirms each step (and the whole goal) succeeded
 9. **Related guides and next steps** — What the reader might reasonably want to do next
 10. **Resources** — Supporting docs, GitHub repos, Slack channels
 
@@ -113,8 +112,6 @@ Links to related how-to guides, patterns, or reference material the reader is li
 
 - **Goal-oriented, not educational** — Do not teach concepts. Assume the reader knows *why* and needs to know *how*. If you find yourself explaining rationale, either delete it or move it to the linked pattern page.
 - **Imperative voice** — "Add the following to your Helm values" not "You could add…" or "One approach is to add…"
-- **Concrete and copy-pasteable** — Prefer real file paths, real commands, real config snippets over paraphrase
 - **One path through the guide** — Cover the recommended path only. Alternatives belong in patterns or reference docs, or as explicit decision points
 - **Link, don't duplicate** — Every pattern this guide composes must be linked to its pattern page. Do not restate pattern rationale
 - **Assume competence, not omniscience** — The reader is a delivery team engineer, not a beginner and not an HMPPS architect
-- **Verifiable** — Every step should have an observable outcome the reader can check
