@@ -98,15 +98,16 @@ For each deploy job (including commented-out preprod and prod jobs, so they stay
 
 ### Helm values
 
-In `helm_deploy/<app>/values.yaml`, replace the hard-coded GHCR repository:
+In `helm_deploy/<app>/values.yaml`, replace only the hard-coded GHCR `repository` value:
 
 ```yaml
 image:
   repository: ecr_repository # override at deployment time
-  tag: app_version # override at deployment time
 ```
 
-The real repository is supplied at deploy time by `helm_additional_args`.
+Leave `tag` (and any other keys) as they are. The templates' `tag: app_version` placeholder already existed there; do not add or change it, because some charts read the version from elsewhere (for example `.Values.version`).
+
+The real repository is supplied at deploy time by `helm_additional_args`. The `--set` path depends on the chart: `generic-service.image.repository` for charts using the `generic-service` dependency (as in the templates), but `image.repository` for custom charts that read `.Values.image.repository`. Check `Chart.yaml` and the templates before choosing, and tell the developer which you used.
 
 ## Permissions and secrets: preserve existing behaviour
 
@@ -116,4 +117,4 @@ Granting `permissions:` on a job or workflow resets every permission not listed 
 - a job-level `permissions` block is added that omits something the job previously inherited from the top level (for example `actions: write`, `attestations: write`, `packages: write`);
 - `secrets: inherit` is replaced by an explicit `secrets:` list that misses a secret, or vice versa.
 
-For each changed job, work out the effective permissions before and after, and make sure nothing is lost. Add `id-token: write`; do not remove other permissions, even where the templates look tighter, as these have been kept for backwards compatibility.
+For each changed job, work out the effective permissions before and after, and make sure nothing is lost. Add `id-token: write`, including at the top-level `permissions` block when jobs call local reusable workflows that wrap the shared ones (a called workflow cannot exceed its caller's permissions); do not remove other permissions, even where the templates look tighter, as these have been kept for backwards compatibility.
