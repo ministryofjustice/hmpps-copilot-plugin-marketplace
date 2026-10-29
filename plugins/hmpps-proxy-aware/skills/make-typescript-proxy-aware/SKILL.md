@@ -206,22 +206,37 @@ Whichever path is used, this is still Phase 1 work — it fixes proxy connectivi
 
 ### Apply Helm proxy configuration
 
-Add proxy env configuration to **`helm_deploy/values-dev.yaml` only** at this stage. For TypeScript services, use this standard pattern:
+Add proxy env configuration to **`helm_deploy/values-dev.yaml` only** at this stage. First check which `generic-service` chart version the app uses (`helm_deploy/<app>/Chart.yaml` dependencies, and `Chart.lock`):
 
-```yaml
-generic-service:
-  env:
-    NODE_USE_ENV_PROXY: "1"
-    APPLICATION_INSIGHTS_NO_STATSBEAT: "true"
-  namespace_secrets:
-    hmpps-envoy-https-proxy-env:
-      HTTP_PROXY: "HTTP_PROXY"
-      HTTPS_PROXY: "HTTPS_PROXY"
-      NO_PROXY: "NO_PROXY"
-      http_proxy: "HTTP_PROXY"
-      https_proxy: "HTTPS_PROXY"
-      no_proxy: "NO_PROXY"
-```
+- **Chart `3.18.0` or later (preferred):** the chart can load the proxy variables itself. Set the secret name once, with the two Node-specific settings:
+
+  ```yaml
+  generic-service:
+    egressProxySecretName: "hmpps-envoy-https-proxy-env"
+    env:
+      NODE_USE_ENV_PROXY: "1"
+      APPLICATION_INSIGHTS_NO_STATSBEAT: "true"
+  ```
+
+  The chart then loads `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` and their lowercase equivalents from that secret with `optional: true` (they are left unset, and pods still start, if the secret is missing from the namespace). Setting `egressProxySecretName` is the explicit signal that the app proxies egress when deployed, and removing it (or setting `""`) is the kill switch. Do not also add the `namespace_secrets` mapping below. If the app's chart is older, offer to bump `generic-service` to `3.18.0`+ (verify that version has been released in `hmpps-helm-charts` first) rather than defaulting to the long form.
+- **Older chart, or the user does not want a chart bump:** use the explicit mapping:
+
+  ```yaml
+  generic-service:
+    env:
+      NODE_USE_ENV_PROXY: "1"
+      APPLICATION_INSIGHTS_NO_STATSBEAT: "true"
+    namespace_secrets:
+      hmpps-envoy-https-proxy-env:
+        HTTP_PROXY: "HTTP_PROXY"
+        HTTPS_PROXY: "HTTPS_PROXY"
+        NO_PROXY: "NO_PROXY"
+        http_proxy: "HTTP_PROXY"
+        https_proxy: "HTTPS_PROXY"
+        no_proxy: "NO_PROXY"
+  ```
+
+Existing explicit `namespace_secrets`/`env` entries for these variables stay valid on newer charts: explicit entries take precedence and are never duplicated, so there is no need to remove them as part of this phase. Offer removing them as an optional tidy-up once `egressProxySecretName` is in place.
 
 Add only to `values-dev.yaml` — do not apply to `values-preprod.yaml`, `values-prod.yaml`, or the shared `values.yaml` unless the user explicitly asks for it after dev validation.
 

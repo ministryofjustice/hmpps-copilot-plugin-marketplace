@@ -206,7 +206,20 @@ place — keeping both is a common leftover that causes confusing duplicate type
 ## Helm proxy configuration
 
 Sourced from `hmpps-tech-docs/src/content/how-to-guides/retrofitting-egress-controls-with-envoy-proxy.md`,
-this is the confirmed current pattern for TypeScript services (also shown in `SKILL.md` Step 6):
+this is the confirmed current pattern for TypeScript services (also shown in `SKILL.md` Phase 1).
+
+Preferred, with `generic-service` chart `3.18.0`+ (loads the proxy variables, including lowercase
+equivalents, from the secret with `optional: true`; remove the key to switch it off):
+
+```yaml
+generic-service:
+  egressProxySecretName: "hmpps-envoy-https-proxy-env"
+  env:
+    NODE_USE_ENV_PROXY: "1"
+    APPLICATION_INSIGHTS_NO_STATSBEAT: "true"
+```
+
+Older charts need the explicit mapping instead (explicit entries are also still honoured on newer charts):
 
 ```yaml
 generic-service:

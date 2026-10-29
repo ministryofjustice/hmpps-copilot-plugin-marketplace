@@ -110,7 +110,7 @@ This skill is designed to help with:
 - Config renames and removing clients made redundant by the above, such as a JWT-superseded `manageUsersApiClient` (Phase 3)
 - Aligning health checks with `@ministryofjustice/hmpps-monitoring` where practical (Phase 3)
 - Aligning telemetry with `@ministryofjustice/hmpps-azure-telemetry` (Phase 3)
-- Applying Helm proxy env vars and namespace secret wiring (Phase 1)
+- Applying Helm proxy config (Phase 1): `egressProxySecretName` on `generic-service` 3.18.0+, or the explicit `namespace_secrets` mapping on older charts
 - Authoring/updating `.github/copilot-instructions.md` to lock in the new patterns (Phase 4)
 
 **Out of scope:** business logic, routes, controllers' domain behaviour, and views — even where `hmpps-template-typescript` differs there too. For broader template alignment beyond infrastructure, use the `sync-typescript-template` skill to apply specific upstream template changes on demand.
