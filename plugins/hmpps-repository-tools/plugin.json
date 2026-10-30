@@ -1,0 +1,11 @@
+{
+  "name": "hmpps-repository-tools",
+  "description": "Skills for working with HMPPS GitHub repositories, to assist with migrations and reconfigurations.",
+  "version": "0.1.0",
+  "author": {
+    "name": "HMPPS Digital",
+    "email": "plugins@hmpps.digital"
+  },
+  "license": "MIT",
+  "keywords": ["github", "migration", "configuration", "repository", "repo", "tools"]
+}
