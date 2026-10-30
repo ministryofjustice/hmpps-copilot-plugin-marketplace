@@ -32,6 +32,12 @@
       "description": "Skills for documenting and maintaining plain-English business logic documentation, with automated freshness tracking via test hashes.",
       "version": "0.1.0",
       "source": "plugins/hmpps-business-logic-docs"
+    },
+    {
+      "name": "hmpps-datahub-reports",
+      "description": "Skills for building reports and data products on the HMPPS DataHub (Digital Prison Reporting) platform, including read-only Redshift MCP setup.",
+      "version": "0.1.0",
+      "source": "plugins/hmpps-datahub-reports"
     }
   ]
 }
