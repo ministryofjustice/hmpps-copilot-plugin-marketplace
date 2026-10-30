@@ -72,11 +72,13 @@ Some repositories build without pushing (`push: false`, `load: true`, `upload_im
 
 For each deploy job (including commented-out preprod and prod jobs, so they stay correct when enabled):
 
+This includes the repository's own manual-deploy workflow, if it has one. In the templates this is `.github/workflows/deploy_to_env.yml` (triggered by `workflow_dispatch`, deploying an existing version); older repositories may call it `deploy_env.yml` or something else. Despite the name, it is a local workflow that calls the shared one, so it needs the same edits, including `helm_additional_args`. It may already call the shared `deploy_to_env.yml` and still lack the image override. Not every repository has one; don't create it if it's missing.
+
 - Change the `uses:` file name to `deploy_to_env.yml`.
-- Add `helm_additional_args` to `with:`. If the job already sets `helm_additional_args`, append rather than overwrite:
+- Add `helm_additional_args` to `with:`. If the job already sets `helm_additional_args`, append rather than overwrite. Use the `--set` path from [Helm values](#helm-values) (`<image-repository-path>` below), for example `image.repository` or `generic-service.image.repository`:
 
   ```yaml
-  helm_additional_args: '--set generic-service.image.repository=${{ vars.CLOUD_PLATFORM_ECR_REGISTRY_URL }}/${{ vars.ECR_REPOSITORY }}'
+  helm_additional_args: '--set <image-repository-path>=${{ vars.CLOUD_PLATFORM_ECR_REGISTRY_URL }}/${{ vars.ECR_REPOSITORY }}'
   ```
 
 - Add job-level permissions (`deploy_to_env.yml` requires `id-token: write`):
@@ -98,7 +100,13 @@ For each deploy job (including commented-out preprod and prod jobs, so they stay
 
 ### Helm values
 
-In `helm_deploy/<app>/values.yaml`, replace only the hard-coded GHCR `repository` value:
+In `helm_deploy/<app>/values.yaml`, replace only the hard-coded GHCR `repository` value under `image:`. Depending on the chart, `image:` is either nested under `generic-service:` (as in the templates) or at the top level (custom charts):
+
+```yaml
+generic-service:
+  image:
+    repository: ecr_repository # override at deployment time
+```
 
 ```yaml
 image:
@@ -107,7 +115,7 @@ image:
 
 Leave `tag` (and any other keys) as they are. The templates' `tag: app_version` placeholder already existed there; do not add or change it, because some charts read the version from elsewhere (for example `.Values.version`).
 
-The real repository is supplied at deploy time by `helm_additional_args`. The `--set` path depends on the chart: `generic-service.image.repository` for charts using the `generic-service` dependency (as in the templates), but `image.repository` for custom charts that read `.Values.image.repository`. Check `Chart.yaml` and the templates before choosing, and tell the developer which you used.
+The real repository is supplied at deploy time by `helm_additional_args`, so the `--set` path must be the full path of that `image.repository` key in the values: `generic-service.image.repository` for the nested form, `image.repository` for the top-level form. `node scripts/find-workflows.mjs` reports every `image.repository` key it finds in `helmImageRepositories`, and the path in `helmSetPath` when there is exactly one distinct path. Each project has only one. Take the path from the values, not from `Chart.yaml` or the templates: a chart can have `image` at the top level whatever its dependencies are. If `helmSetPath` is `null` (none found, or more than one distinct path), show the developer what was found and ask. Tell the developer which path you used.
 
 ## Permissions and secrets: preserve existing behaviour
 

@@ -45,9 +45,10 @@ Run from the root of a clone of the repository to migrate.
 Options:
   --branch NAME       Branch to create (default: $BRANCH)
   --helm-path PATH    Helm --set path for the image repository, for example
-                      'image.repository'. Default: detected from Chart.yaml
-                      ('generic-service.image.repository' when the chart
-                      depends on generic-service, otherwise 'image.repository').
+                      'image.repository'. Default: the path of the single
+                      image.repository key in helm_deploy/**/values*.yaml
+                      (for example 'image.repository' or
+                      'generic-service.image.repository').
   --skip-preflight    Don't check the repository-level ECR variables and secret
                       (use only if they are set at organisation level).
   -y, --yes           Commit, push and open a pull request without asking.
@@ -160,29 +161,47 @@ ok "On $BRANCH"
 # ---------------------------------------------------------------------------
 # 3. Helm --set path
 # ---------------------------------------------------------------------------
-if [ -z "$HELM_SET_PATH" ]; then
-  charts=$(ls helm_deploy/*/Chart.yaml 2>/dev/null || true)
-  if [ -z "$charts" ]; then
-    HELM_SET_PATH="generic-service.image.repository"
-    warn "No helm_deploy/*/Chart.yaml found; using --set $HELM_SET_PATH"
-  else
-    generic=0; custom=0
-    for c in $charts; do
-      if grep -Eq '^[[:space:]]*-?[[:space:]]*name:[[:space:]]*["'\'']?generic-service["'\'']?[[:space:]]*$' "$c"; then
-        generic=$((generic + 1))
-      else
-        custom=$((custom + 1))
-      fi
-    done
-    if [ $generic -gt 0 ] && [ $custom -eq 0 ]; then
-      HELM_SET_PATH="generic-service.image.repository"
-    elif [ $custom -gt 0 ] && [ $generic -eq 0 ]; then
-      HELM_SET_PATH="image.repository"
-    else
-      HELM_SET_PATH="generic-service.image.repository"
-      warn "Found both generic-service and custom charts; using --set $HELM_SET_PATH. Re-run with --helm-path if that's wrong."
-    fi
+# The --set path is wherever image.repository sits in the Helm values, for example
+# 'image.repository' (custom charts) or 'generic-service.image.repository' (generic-service charts).
+abandon_branch() {
+  git switch --quiet "$START_REF" && git branch --quiet -D "$BRANCH"
+  die "$1"
+}
+shopt -s nullglob
+helm_values_files=(helm_deploy/*/values*.yaml helm_deploy/*/values*.yml helm_deploy/values*.yaml helm_deploy/values*.yml)
+shopt -u nullglob
+image_repo_refs=""
+if [ ${#helm_values_files[@]} -gt 0 ]; then
+  image_repo_refs="$(perl -ne '
+    @s = () if $. == 1;
+    my $at = "$ARGV:$.";
+    close ARGV if eof;
+    next if /^\s*(#|$)/ || /^\s*(---|\.\.\.)\s*$/;
+    next unless /^(\s*)(-\s+)?(["\x27]?)([\w.-]+)\3\s*:(?:\s+(.*?))?\s*$/;
+    my ($in, $key, $v) = (length($1) + length($2 // ""), $4, $5 // "");
+    $v =~ s/\s+#.*$//;
+    pop @s while @s && $s[-1][0] >= $in;
+    print join(".", (map { $_->[1] } @s), $key), "\t$at\n" if $key eq "repository" && @s && $s[-1][1] eq "image";
+    push @s, [$in, $key] if $v eq "" || $v =~ /^#/;
+  ' "${helm_values_files[@]}")" || abandon_branch "Couldn't read the Helm values to find the image repository. Re-run with --helm-path PATH."
+fi
+detected_paths="$(printf '%s\n' "$image_repo_refs" | cut -f1 | sed '/^$/d' | sort -u)"
+detected_count="$(printf '%s\n' "$detected_paths" | sed '/^$/d' | wc -l | tr -d ' ')"
+
+if [ -n "$HELM_SET_PATH" ]; then
+  if [ "$detected_count" -eq 1 ] && [ "$detected_paths" != "$HELM_SET_PATH" ]; then
+    warn "--helm-path $HELM_SET_PATH differs from the image repository found in the Helm values ($detected_paths)"
   fi
+elif [ "$detected_count" -eq 1 ]; then
+  HELM_SET_PATH="$detected_paths"
+  ok "Found the image repository at $HELM_SET_PATH ($(printf '%s\n' "$image_repo_refs" | cut -f2 | paste -sd, -))"
+elif [ "$detected_count" -eq 0 ]; then
+  abandon_branch "Couldn't find an image.repository key in helm_deploy/**/values*.yaml.
+Re-run with --helm-path PATH, for example --helm-path image.repository or --helm-path generic-service.image.repository."
+else
+  printf '%s\n' "$image_repo_refs" | sed 's/^/      /'
+  abandon_branch "Found more than one image repository path in the Helm values (above), so the --set path is ambiguous.
+Re-run with --helm-path PATH to choose one."
 fi
 ok "Helm image override: --set $HELM_SET_PATH=<ECR registry>/<ECR repository>"
 
@@ -413,7 +432,11 @@ sub ensure_helm_args {
   my $i = with_get($A, $job, 'helm_additional_args');
   if (!defined $i) { with_add($A, $job, 'helm_additional_args', "'$set'"); return }
   my $l = $A->[$i];
-  return if $l =~ /image\.repository=/;
+  return if $l =~ /(^|[\s'"])\Q$helm_path\E=/;
+  if ($l =~ /([\w.-]*image\.repository)=/) {
+    manual("job '$name' already sets --set $1=..., but the Helm values have the image repository at $helm_path; fix it by hand");
+    return;
+  }
   $l =~ /^(\s*helm_additional_args:\s*)(.*)$/;
   my ($pre, $v) = ($1, $2);
   if ($v =~ /^'(.*)'(\s*#.*)?$/) {
@@ -633,6 +656,8 @@ done
 info "Checking"
 if [ ${#changed_files[@]} -eq 0 ]; then
   warn "Nothing to change: no GHCR shared workflow calls or ghcr.io Helm values found."
+  early_manual="$(sort -u "$NOTES_FILE" | grep '^MANUAL|' | cut -d'|' -f2- | sed 's/|/: /' || true)"
+  if [ -n "$early_manual" ]; then info "${YELLOW}Needs a manual check${RESET}"; printf '%s\n' "$early_manual" | sed 's/^/  - /'; fi
   git switch --quiet "$START_REF" && git branch --quiet -D "$BRANCH"
   echo "Removed the empty branch $BRANCH. The repository may already be migrated."
   exit 0

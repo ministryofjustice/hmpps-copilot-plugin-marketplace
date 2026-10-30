@@ -57,7 +57,7 @@ curl -fsSLO https://raw.githubusercontent.com/ministryofjustice/hmpps-copilot-pl
 bash migrate-ghcr-to-ecr.sh
 ```
 
-It runs the same preflight checks, creates `feat/migrate_build_deploy_to_ECR`, edits the workflows and Helm values in place (keeping comments and formatting, including commented-out jobs), then shows you the diff. It asks before committing, pushing and opening a pull request. Run `bash migrate-ghcr-to-ecr.sh --help` for options, such as `--helm-path` to override the Helm `--set` path.
+It runs the same preflight checks, creates `feat/migrate_build_deploy_to_ECR`, edits the workflows and Helm values in place (keeping comments and formatting, including commented-out jobs), then shows you the diff. It asks before committing, pushing and opening a pull request. Run `bash migrate-ghcr-to-ecr.sh --help` for options, such as `--helm-path` to override the Helm `--set` path (by default it uses wherever `image.repository` is in your Helm values, such as `image.repository` or `generic-service.image.repository`).
 
 Unlike the skill, the script can't make judgement calls. It lists anything it can't handle under **Needs a manual check**, for example:
 
@@ -76,7 +76,7 @@ Review the diff, then run the pipeline on the branch. That's the real test.
 | `references/ecr-migration-changes.md`  | Workflow mapping, inputs, permissions and secrets     |
 | `scripts/preflight.mjs`                | Checks `gh`, authentication, ECR variables and secret |
 | `scripts/prepare-branch.mjs`           | Pulls the default branch and creates the branch       |
-| `scripts/find-workflows.mjs`           | Finds shared workflow calls and `ghcr.io` references  |
+| `scripts/find-workflows.mjs`           | Finds shared workflow calls, `ghcr.io` references and the Helm `image.repository` path |
 | `scripts/migrate-ghcr-to-ecr.sh`      | Standalone migration script for use without Copilot   |
 
 Scripts are plain Node.js with no dependencies. They print JSON to stdout and errors to stderr, and exit with code 1 on failure.

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Lists GitHub Actions workflows that call the shared HMPPS workflows relevant to the ECR migration,
-// and other places that still reference ghcr.io. Read-only; prints JSON to stdout.
+// other places that still reference ghcr.io, and where `image.repository` sits in the Helm values
+// (which gives the --set path for the deploy jobs). Read-only; prints JSON to stdout.
 // Usage: node find-workflows.mjs [repo-root]
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -16,6 +17,26 @@ const SKIP_DIRS = new Set(['.git', 'node_modules', 'build', 'dist', 'out', '.gra
 
 const sharedCalls = []
 const ghcrReferences = []
+const helmImageRepositories = []
+
+// Finds every `repository:` key whose parent key is `image`, and returns its full dotted path,
+// for example `image.repository` or `generic-service.image.repository`. Line based, using indentation.
+const findImageRepositories = (rel, lines) => {
+  const stack = []
+  lines.forEach((text, i) => {
+    if (/^\s*(#|$)/.test(text) || /^\s*(---|\.\.\.)\s*$/.test(text)) return
+    const m = text.match(/^(\s*)(-\s+)?(["']?)([\w.-]+)\3\s*:(?:\s+(.*?))?\s*$/)
+    if (!m) return
+    const indent = m[1].length + (m[2] || '').length
+    while (stack.length && stack[stack.length - 1].indent >= indent) stack.pop()
+    const key = m[4]
+    const value = (m[5] || '').replace(/\s+#.*$/, '')
+    if (key === 'repository' && stack.length && stack[stack.length - 1].key === 'image') {
+      helmImageRepositories.push({ file: rel, line: i + 1, path: [...stack.map(s => s.key), key].join('.'), value })
+    }
+    if (!value || value.startsWith('#')) stack.push({ indent, key })
+  })
+}
 
 const walk = dir => {
   for (const name of readdirSync(dir)) {
@@ -35,6 +56,7 @@ const walk = dir => {
     } catch {
       continue
     }
+    if (/^helm_deploy\/(.+\/)?values[^/]*\.ya?ml$/.test(rel)) findImageRepositories(rel, lines)
     lines.forEach((text, i) => {
       if (isWorkflow) {
         const m = text.match(SHARED)
@@ -48,4 +70,7 @@ const walk = dir => {
 }
 
 walk(root)
-console.log(JSON.stringify({ sharedCalls, ghcrReferences }, null, 2))
+// The Helm --set path for the image repository: only set when exactly one distinct path is found.
+const paths = [...new Set(helmImageRepositories.map(r => r.path))]
+const helmSetPath = paths.length === 1 ? paths[0] : null
+console.log(JSON.stringify({ sharedCalls, ghcrReferences, helmImageRepositories, helmSetPath }, null, 2))
