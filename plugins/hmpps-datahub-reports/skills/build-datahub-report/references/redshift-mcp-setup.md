@@ -1,6 +1,6 @@
 # Redshift access setup (development, read-only)
 
-Give agents direct query access to the DPR development Redshift cluster using the AWS Labs Redshift MCP server (`awslabs.redshift-mcp-server`), which talks to the Redshift Data API. This is far quicker than driving the AWS console query editor through a browser.
+Give agents direct query access to the DPR development Redshift cluster using the AWS Labs Redshift MCP server (`awslabs.redshift-mcp-server`), which talks to the Redshift Data API.
 
 Rules for this setup:
 
@@ -16,7 +16,7 @@ Rules for this setup:
 
 ## 1. AWS SSO profile
 
-Sign in at `https://moj.awsapps.com/start`. Pick the `digital-prison-reporting-development` account; the role `mp-reporting-operations` is listed under it. The account ID is shown beside the account name.
+You need the account ID of `digital-prison-reporting-development` for the profile below. If the user doesn't know it, run `aws configure sso` (start URL `https://moj.awsapps.com/start`, region `eu-west-2`). It lists the accounts and roles the user can access, with their IDs. Pick `digital-prison-reporting-development` and `mp-reporting-operations`, or just note the ID and write the profile by hand.
 
 Add a profile to `~/.aws/config` (do not remove existing profiles):
 
