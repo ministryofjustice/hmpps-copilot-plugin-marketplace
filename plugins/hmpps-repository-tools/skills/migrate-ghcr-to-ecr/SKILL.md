@@ -23,6 +23,7 @@ Trigger phrases: "migrate to ECR", "move from GHCR to ECR", "switch docker_build
 - Do not guess. If a workflow does not match the patterns in the reference, show it to the developer and ask.
 - Never remove existing permissions or secrets; only add what ECR needs.
 - Make the minimum edit to each file; preserve comments, formatting and the `@ref` on `uses:` lines.
+- Do not run `scripts/migrate-ghcr-to-ecr.sh`. It is the standalone alternative for developers without Copilot, not part of this skill.
 
 ## Steps
 

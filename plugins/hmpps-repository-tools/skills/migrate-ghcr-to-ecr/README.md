@@ -46,6 +46,28 @@ The changes follow those made to
 
 Or ask Copilot in natural language, for example "migrate this repository from GHCR to ECR".
 
+## Without Copilot
+
+If you don't have Copilot, [`scripts/migrate-ghcr-to-ecr.sh`](scripts/migrate-ghcr-to-ecr.sh) makes the same changes. It needs `git`, `gh` (authenticated) and `perl`, which ships with macOS and Linux.
+
+Run it from the root of a clone of your repository:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/ministryofjustice/hmpps-copilot-plugin-marketplace/main/plugins/hmpps-repository-tools/skills/migrate-ghcr-to-ecr/scripts/migrate-ghcr-to-ecr.sh
+bash migrate-ghcr-to-ecr.sh
+```
+
+It runs the same preflight checks, creates `feat/migrate_build_deploy_to_ECR`, edits the workflows and Helm values in place (keeping comments and formatting, including commented-out jobs), then shows you the diff. It asks before committing, pushing and opening a pull request. Run `bash migrate-ghcr-to-ecr.sh --help` for options, such as `--helm-path` to override the Helm `--set` path.
+
+Unlike the skill, the script can't make judgement calls. It lists anything it can't handle under **Needs a manual check**, for example:
+
+- jobs that gained a `permissions` block where it can't tell what they inherited before;
+- multi-line `helm_additional_args`;
+- build, deploy or Snyk workflows called from repositories other than `hmpps-github-actions`;
+- leftover GHCR references, such as `FROM ghcr.io/...` base images and `ghcr-pull-secret`.
+
+Review the diff, then run the pipeline on the branch. That's the real test.
+
 ## Contents
 
 | Path                                   | Purpose                                               |
@@ -55,5 +77,6 @@ Or ask Copilot in natural language, for example "migrate this repository from GH
 | `scripts/preflight.mjs`                | Checks `gh`, authentication, ECR variables and secret |
 | `scripts/prepare-branch.mjs`           | Pulls the default branch and creates the branch       |
 | `scripts/find-workflows.mjs`           | Finds shared workflow calls and `ghcr.io` references  |
+| `scripts/migrate-ghcr-to-ecr.sh`      | Standalone migration script for use without Copilot   |
 
 Scripts are plain Node.js with no dependencies. They print JSON to stdout and errors to stderr, and exit with code 1 on failure.
