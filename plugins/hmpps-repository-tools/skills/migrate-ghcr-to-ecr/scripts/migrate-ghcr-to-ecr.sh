@@ -64,7 +64,8 @@ What it does:
        security_snyk_scan[_private].yml -> security_snyk_scan_ecr.yml
      adding the ECR inputs, the ECR_ROLE_TO_ASSUME secret, id-token: write and
      the Helm image repository override. Commented-out jobs are updated too.
-  4. Replaces the ghcr.io image repository in helm_deploy/*/values*.yaml.
+  4. Replaces the app's ghcr.io image repository in helm_deploy/*/values*.yaml
+     and removes ghcr-pull-secret from its imagePullSecrets.
   5. Shows the diff and anything that needs a manual check, then asks before
      committing, pushing and opening a pull request.
 EOF
@@ -224,8 +225,10 @@ use warnings;
 # Usage: perl editor.pl MODE FILE
 #   MODE migrate : switch shared workflow calls to their ECR versions
 #   MODE callers : add id-token: write for jobs calling locally modified workflows
-# Env: HELM_SET_PATH, AWS_REGION_INPUT, MODIFIED_WORKFLOWS (comma separated basenames)
-# Prints "CHANGED" to stdout if the file was modified; notes go to stderr.
+#   MODE values  : Helm values: switch the app's image repository, remove ghcr-pull-secret
+# Env: HELM_SET_PATH, AWS_REGION_INPUT, REPO_NAME, MODIFIED_WORKFLOWS (comma separated basenames)
+# Prints "CHANGED" to stdout if the file was modified, and "CALLER" (callers mode) if it calls a
+# modified workflow; notes go to stderr.
 
 my ($mode, $file) = @ARGV;
 my $helm_path = $ENV{HELM_SET_PATH} || 'generic-service.image.repository';
@@ -236,6 +239,28 @@ my $REG    = '${{ vars.CLOUD_PLATFORM_ECR_REGISTRY_URL }}';
 my $REPO   = '${{ vars.ECR_REPOSITORY }}';
 my $SECRET = '${{ secrets.ECR_ROLE_TO_ASSUME }}';
 my $SHARED = qr{ministryofjustice/hmpps-github-actions/\.github/workflows/};
+my $repo_name = $ENV{REPO_NAME} || '';
+
+# From the shared workflows at v2. The caller must grant at least what the called workflow requests.
+my %NEED = (
+  docker_build_ecr       => [['id-token', 'write']],
+  docker_push_ecr        => [['contents', 'read'], ['id-token', 'write']],
+  deploy_to_env          => [['contents', 'read'], ['id-token', 'write']],
+  security_snyk_scan_ecr => [['contents', 'read'], ['security-events', 'write'], ['actions', 'read'], ['id-token', 'write']],
+);
+# Used for a new job permissions block (merged with the top-level permissions).
+my %NEW_BLOCK = (
+  docker_build_ecr       => [['contents', 'read'], ['packages', 'write'], ['id-token', 'write'], ['attestations', 'write']],
+  docker_push_ecr        => [['contents', 'read'], ['packages', 'write'], ['id-token', 'write'], ['attestations', 'write']],
+  deploy_to_env          => [['contents', 'read'], ['id-token', 'write']],
+  security_snyk_scan_ecr => [['contents', 'read'], ['security-events', 'write'], ['actions', 'read'], ['id-token', 'write']],
+);
+my %INPUTS = (
+  docker_build_ecr       => [qw(docker_registry registry_org additional_docker_tag tag_latest upload_image_artifact image_artifact_retention_days additional_docker_build_args additional_docker_secrets_args push load docker_multiplatform image_name image_version file download_build_artifacts generate_sbom attach_sbom_to_registry sign_image)],
+  docker_push_ecr        => [qw(ecr_registry_url ecr_repository aws_region app_version tag_latest additional_docker_tag docker_multiplatform)],
+  deploy_to_env          => [qw(dryrun environment app_version k8s_deployment_name changelog_git_paths show_changelog slack_notification helm_additional_args helm_timeout helm_dir helm_chart_name autogenerate_scheduled_downtime_cron notify_on_deploy)],
+  security_snyk_scan_ecr => [qw(channel_id subproject severity slack_include_summary scan_type location snyk_policy_path image_ref)],
+);
 
 open my $in, '<', $file or die "Cannot read $file: $!";
 my @L = <$in>;
@@ -410,6 +435,9 @@ sub ensure_perms {
     return;
   }
   my (@order, %lvl);
+  if ($tp && defined $tp->{scalar} && $tp->{scalar} eq 'write-all') {
+    return;    # the job inherits write-all, which includes everything it needs
+  }
   if ($tp && $tp->{map}) {
     for my $key (@{ $tp->{order} }) { push @order, $key; $lvl{$key} = $tp->{map}{$key} }
   } else {
@@ -432,7 +460,17 @@ sub ensure_helm_args {
   my $i = with_get($A, $job, 'helm_additional_args');
   if (!defined $i) { with_add($A, $job, 'helm_additional_args', "'$set'"); return }
   my $l = $A->[$i];
-  return if $l =~ /(^|[\s'"])\Q$helm_path\E=/;
+  if ($l =~ /(?:^|[\s'"])\Q$helm_path\E=([^\s'"]*(?:\$\{\{[^}]*\}\}[^\s'"]*)*)/) {
+    my $cur = $1;
+    return if $cur eq "$REG/$REPO";
+    if ($cur =~ /ghcr/i) {
+      $A->[$i] =~ s/(\Q$helm_path\E=)\Q$cur\E/$1$REG\/$REPO/;
+      note("job '$name': replaced the GHCR image repository in the existing --set $helm_path");
+    } else {
+      manual("job '$name' already sets --set $helm_path=$cur; check it points at ECR ($REG/$REPO)");
+    }
+    return;
+  }
   if ($l =~ /([\w.-]*image\.repository)=/) {
     manual("job '$name' already sets --set $1=..., but the Helm values have the image repository at $helm_path; fix it by hand");
     return;
@@ -451,6 +489,47 @@ sub ensure_helm_args {
 }
 
 # ---- migrate one job ---------------------------------------------------------
+sub with_value {
+  my ($A, $job, $key) = @_;
+  my $i = with_get($A, $job, $key);
+  return (undef, undef) unless defined $i;
+  my ($v) = $A->[$i] =~ /^\s*\Q$key\E:\s*(.*?)\s*$/;
+  $v =~ s/\s+#.*$// unless $v =~ /^['"]/;
+  $v =~ s/^(['"])(.*)\1(\s*#.*)?$/$2/;
+  return ($i, $v);
+}
+
+sub check_inputs {
+  my ($A, $job, $target, $name) = @_;
+  my $k = job_keys($A, $job);
+  return unless exists $k->{with};
+  my %ok = map { $_ => 1 } @{ $INPUTS{$target} };
+  my ($f, $e, $ci) = child_range($A, $job, $k->{with});
+  for my $i ($f .. $e - 1) {
+    next unless ind($A->[$i]) == $ci && $A->[$i] =~ /^\s*([\w-]+):/;
+    next if $1 eq 'image_name';    # reported by migrate_image_name
+    manual("job '$name' passes '$1', which $target.yml doesn't accept; remove or replace it") unless $ok{$1};
+  }
+}
+
+sub migrate_image_name {
+  # GHCR image_name is the package name; in the ECR workflows the repository comes from vars.ECR_REPOSITORY.
+  my ($A, $job, $name) = @_;
+  my ($i, $v) = with_value($A, $job, 'image_name');
+  return unless defined $i;
+  if ($v =~ /\$\{\{/) {
+    manual("job '$name' sets image_name: $v. The ECR workflows use vars.ECR_REPOSITORY; if this builds more than one image, each needs its own ECR repository");
+    return;
+  }
+  splice @$A, $i, 1;
+  $job->{end}--;
+  if ($repo_name ne '' && $v ne $repo_name) {
+    manual("job '$name': removed image_name: $v, so it now uses vars.ECR_REPOSITORY. If this repository builds more than one image, each needs its own ECR repository");
+  } else {
+    note("job '$name': removed image_name: $v (ECR uses vars.ECR_REPOSITORY)");
+  }
+}
+
 sub migrate_job {
   my ($A, $job, $tp, $name) = @_;
   my $k = job_keys($A, $job);
@@ -461,9 +540,11 @@ sub migrate_job {
   return 0 unless defined $wf;
 
   if ($wf eq 'docker_build' || $wf eq 'docker_push') {
-    $A->[$u] =~ s{/workflows/$wf\.yml@}{/workflows/${wf}_ecr.yml@};
+    my $target = "${wf}_ecr";
+    $A->[$u] =~ s{/workflows/$wf\.yml@}{/workflows/$target.yml@};
     with_remove($A, $job, 'docker_registry');
     with_remove($A, $job, 'registry_org');
+    migrate_image_name($A, $job, $name);
     if ($wf eq 'docker_push') {
       with_add($A, $job, 'ecr_repository', '${{ vars.ECR_REPOSITORY }}') unless defined with_get($A, $job, 'ecr_repository');
       with_add($A, $job, 'ecr_registry_url', '${{ vars.CLOUD_PLATFORM_ECR_REGISTRY_URL }}') unless defined with_get($A, $job, 'ecr_registry_url');
@@ -471,40 +552,53 @@ sub migrate_job {
       note("job '$name': docker_push -> docker_push_ecr; check the inputs against docker_push_ecr.yml");
     }
     ensure_secret($A, $job);
-    ensure_perms($A, $job, $tp, [['id-token', 'write']],
-      [['contents', 'read'], ['packages', 'write'], ['id-token', 'write'], ['attestations', 'write']], $name);
+    ensure_perms($A, $job, $tp, $NEED{$target}, $NEW_BLOCK{$target}, $name);
+    check_inputs($A, $job, $target, $name);
     return 1;
   }
   if ($wf eq 'deploy_env' || $wf eq 'deploy_to_env') {
     $A->[$u] =~ s{/workflows/deploy_env\.yml@}{/workflows/deploy_to_env.yml@};
     ensure_helm_args($A, $job, $name);
-    ensure_perms($A, $job, $tp, [['contents', 'read'], ['id-token', 'write']],
-      [['contents', 'read'], ['id-token', 'write']], $name);
+    ensure_perms($A, $job, $tp, $NEED{deploy_to_env}, $NEW_BLOCK{deploy_to_env}, $name);
+    check_inputs($A, $job, 'deploy_to_env', $name);
     return 1;
   }
   if ($wf eq 'security_snyk_scan' || $wf eq 'security_snyk_scan_private') {
     $A->[$u] =~ s{/workflows/$wf\.yml@}{/workflows/security_snyk_scan_ecr.yml@};
-    with_add($A, $job, 'image_ref', "'$REG/$REPO:latest'") unless defined with_get($A, $job, 'image_ref');
+    my ($i, $v) = with_value($A, $job, 'image_ref');
+    if (!defined $i) {
+      with_add($A, $job, 'image_ref', "'$REG/$REPO:latest'");
+    } elsif ($v =~ /ghcr\.io/i) {
+      # keep the tag or digest, replace the registry and image
+      $A->[$i] =~ s{ghcr\.io/[^:\@'"]*}{$REG/$REPO}i;
+      note("job '$name': replaced the GHCR image_ref with the ECR image");
+    } elsif (index($v, "$REG/$REPO") < 0) {
+      manual("job '$name' has image_ref: $v; check it points at the ECR image ($REG/$REPO)");
+    }
     ensure_secret($A, $job);
-    ensure_perms($A, $job, $tp, [['id-token', 'write']], [['contents', 'read'], ['id-token', 'write']], $name);
+    ensure_perms($A, $job, $tp, $NEED{security_snyk_scan_ecr}, $NEW_BLOCK{security_snyk_scan_ecr}, $name);
+    check_inputs($A, $job, 'security_snyk_scan_ecr', $name);
     note("job '$name': $wf -> security_snyk_scan_ecr") if $wf eq 'security_snyk_scan_private';
     return 1;
   }
   return 0;
 }
 
+my $need_top_id_token = 0;
 sub caller_job {
   my ($A, $job, $tp, $name) = @_;
   my $k = job_keys($A, $job);
   return 0 unless exists $k->{uses};
   my ($local) = $A->[$k->{uses}] =~ m{uses:\s*\./\.github/workflows/([\w.-]+)};
   return 0 unless $local && $modified{$local};
+  print "CALLER\n";
   if (exists $k->{permissions}) {
     ensure_perms($A, $job, $tp, [['id-token', 'write']], [], $name);
   } else {
-    ensure_top_id_token($A);
+    # Inserting at the top would shift the positions of the jobs still to be processed, so do it afterwards.
+    $need_top_id_token = 1;
   }
-  note("job '$name' calls local workflow $local, which now needs id-token: write");
+  note("job '$name' calls local workflow $local, which needs id-token: write");
   return 1;
 }
 
@@ -535,9 +629,75 @@ sub process {
   return ($changed, $J);
 }
 
+# ---- Helm values -------------------------------------------------------------
+# Replaces the app's GHCR image repository (only at HELM_SET_PATH) and removes ghcr-pull-secret
+# from the app's imagePullSecrets (a sibling of its image key). Anything else GHCR is flagged.
+sub values_mode {
+  my ($A) = @_;
+  my @parts = split /\./, $helm_path;
+  my $app_parent = join '.', @parts[0 .. $#parts - 2];
+  my (@stack, @remove);
+  for my $i (0 .. $#$A) {
+    my $t = $A->[$i];
+    next if blank($t) || cmt($t) || $t =~ /^\s*(---|\.\.\.)\s*$/;
+    next unless $t =~ /^(\s*)(-\s+)?(["']?)([\w.-]+)\3\s*:(?:\s+(.*?))?\s*$/;
+    my ($in, $key, $v) = (length($1) + length($2 // ''), $4, $5 // '');
+    $v =~ s/\s+#.*$//;
+    pop @stack while @stack && $stack[-1][0] >= $in;
+    my $parent = join '.', map { $_->[1] } @stack;
+    my $path = join '.', grep { length } $parent, $key;
+    if ($path eq $helm_path && $v =~ /ghcr/i) {
+      $A->[$i] =~ s/^(\s*(?:-\s+)?["']?repository["']?\s*:\s*).*$/${1}ecr_repository # override at deployment time/;
+      note("replaced the GHCR image repository at $path");
+    } elsif ($key eq 'imagePullSecrets' && $parent eq $app_parent && $v eq '') {
+      push @remove, pull_secret_lines($A, $i, $in);
+    }
+    push @stack, [$in, $key] if $v eq '' || $v =~ /^#/;
+  }
+  # Report GHCR references we haven't handled (other images, namespace secrets, templates' pull secrets).
+  my %rm = map { $_ => 1 } @remove;
+  for my $i (0 .. $#$A) {
+    next if $rm{$i} || cmt($A->[$i]);
+    next unless $A->[$i] =~ /ghcr/i;
+    next if $A->[$i] =~ /ecr_repository # override at deployment time/;
+    (my $t = $A->[$i]) =~ s/^\s+//;
+    manual("line " . ($i + 1) . " ($t) still refers to GHCR and isn't this app's image or pull secret, so it was left unchanged; check whether it's still needed");
+  }
+  return unless @remove;
+  for my $i (sort { $b <=> $a } @remove) { splice @$A, $i, 1 }
+  # don't leave a double blank line where a block was removed
+  my $at = (sort { $a <=> $b } @remove)[0];
+  while ($at > 0 && $at <= $#$A && blank($A->[$at - 1]) && blank($A->[$at])) { splice @$A, $at - 1, 1; $at-- }
+  note("removed ghcr-pull-secret from imagePullSecrets (images are pulled from ECR without a pull secret)");
+}
+
+sub pull_secret_lines {
+  # Returns the lines to delete for ghcr-pull-secret entries in the imagePullSecrets block at $k.
+  my ($A, $k, $in) = @_;
+  my ($j, @items) = ($k + 1);
+  while ($j <= $#$A) {
+    my $t = $A->[$j];
+    if (!blank($t) && !cmt($t)) {
+      last if ind($t) < $in || (ind($t) == $in && $t !~ /^\s*-/);
+      if ($t =~ /^\s*-/) { push @items, [$j, $j] } elsif (@items) { $items[-1][1] = $j }
+    }
+    $j++;
+  }
+  my @ghcr = grep { my ($s, $e) = @$_; grep { /ghcr-pull-secret/ } @$A[$s .. $e] } @items;
+  return () unless @ghcr;
+  return ($k .. $items[-1][1]) if @ghcr == @items;
+  return map { $_->[0] .. $_->[1] } @ghcr;
+}
+
 my $tp = top_perms(\@L);
-my $fn = $mode eq 'callers' ? \&caller_job : \&migrate_job;
-my ($changed, $J) = process(\@L, $tp, $fn);
+my ($changed, $J) = (0, undef);
+if ($mode eq 'values') {
+  values_mode(\@L);
+} else {
+  my $fn = $mode eq 'callers' ? \&caller_job : \&migrate_job;
+  ($changed, $J) = process(\@L, $tp, $fn);
+  ensure_top_id_token(\@L) if $need_top_id_token;
+}
 
 # Commented-out jobs: uncomment each run of comment lines at job indent or shallower,
 # migrate the jobs in it, then re-comment in the same style.
@@ -600,7 +760,7 @@ if ($new ne $orig) {
 PERL
 
 run_editor() {
-  HELM_SET_PATH="$HELM_SET_PATH" AWS_REGION_INPUT="$AWS_REGION_INPUT" MODIFIED_WORKFLOWS="${MODIFIED_WORKFLOWS:-}" \
+  HELM_SET_PATH="$HELM_SET_PATH" AWS_REGION_INPUT="$AWS_REGION_INPUT" REPO_NAME="${REPO#*/}" MODIFIED_WORKFLOWS="${MODIFIED_WORKFLOWS:-}" \
     perl "$EDITOR_PL" "$1" "$2" 2>>"$NOTES_FILE"
 }
 
@@ -617,34 +777,46 @@ changed_files=()
 MODIFIED_WORKFLOWS=""
 for f in ${workflow_files[@]+"${workflow_files[@]}"}; do
   grep -Eq "$TARGET_RE" "$f" || continue
-  if [ "$(run_editor migrate "$f")" = "CHANGED" ]; then
+  if run_editor migrate "$f" | grep -qx CHANGED; then
     changed_files+=("$f")
     MODIFIED_WORKFLOWS="${MODIFIED_WORKFLOWS:+$MODIFIED_WORKFLOWS,}$(basename "$f")"
     ok "$f"
   fi
 done
 
-# Workflows that call the local workflows we just changed need id-token: write too.
-if [ -n "$MODIFIED_WORKFLOWS" ]; then
+# Workflows that call the local workflows we just changed need id-token: write too, and so do
+# their callers, all the way up. Repeat until no new callers are found.
+in_list() { case ",$2," in *",$1,"*) return 0 ;; esac; return 1; }
+changed_list=""
+for f in ${changed_files[@]+"${changed_files[@]}"}; do changed_list="$changed_list,$f"; done
+while [ -n "$MODIFIED_WORKFLOWS" ]; do
+  found_new=false
   for f in ${workflow_files[@]+"${workflow_files[@]}"}; do
     grep -Eq 'uses:[[:space:]]*\./\.github/workflows/' "$f" || continue
-    if [ "$(run_editor callers "$f")" = "CHANGED" ]; then
+    out="$(run_editor callers "$f")"
+    if printf '%s\n' "$out" | grep -qx CHANGED && ! in_list "$f" "$changed_list"; then
       ok "$f (calls a changed local workflow)"
       changed_files+=("$f")
+      changed_list="$changed_list,$f"
+    fi
+    if printf '%s\n' "$out" | grep -qx CALLER && ! in_list "$(basename "$f")" "$MODIFIED_WORKFLOWS"; then
+      MODIFIED_WORKFLOWS="$MODIFIED_WORKFLOWS,$(basename "$f")"
+      found_new=true
     fi
   done
-fi
+  $found_new || break
+done
 
 # ---------------------------------------------------------------------------
 # 5. Helm values
 # ---------------------------------------------------------------------------
 info "Updating Helm values"
 shopt -s nullglob
-values_files=(helm_deploy/*/values*.yaml helm_deploy/values*.yaml)
+values_files=(helm_deploy/*/values*.yaml helm_deploy/*/values*.yml helm_deploy/values*.yaml helm_deploy/values*.yml)
 shopt -u nullglob
 for f in ${values_files[@]+"${values_files[@]}"}; do
-  if grep -Eq '^[[:space:]]*repository:[[:space:]]*["'\'']?ghcr\.io/' "$f"; then
-    perl -pi -e 's/^(\s*repository:\s*)["\x27]?ghcr\.io\/\S*.*$/${1}ecr_repository # override at deployment time/' "$f"
+  grep -qi 'ghcr' "$f" || continue
+  if run_editor values "$f" | grep -qx CHANGED; then
     ok "$f"
     changed_files+=("$f")
   fi
@@ -681,7 +853,7 @@ fi
 
 ghcr_refs="$(git grep -nIi 'ghcr' -- . ':!*.md' 2>/dev/null || true)"
 if [ -n "$ghcr_refs" ]; then
-  warn "Remaining GHCR references (not changed). Base images (FROM ghcr.io/...) will need authentication to pull if those packages become internal; ghcr-pull-secret / imagePullSecrets can be removed once the app deploys from ECR:"
+  warn "Remaining GHCR references (not changed). Base images (FROM ghcr.io/...) will need authentication to pull if those packages become internal. Other ghcr-pull-secret references (for example in Helm templates) can go once the app deploys from ECR, unless the app itself uses GHCR:"
   printf '      %s\n' "$ghcr_refs"
 fi
 
@@ -758,7 +930,7 @@ Generated by \`migrate-ghcr-to-ecr.sh\`.
 - \`docker_build\` → \`docker_build_ecr\` (registry inputs removed, \`ECR_ROLE_TO_ASSUME\` secret and \`id-token: write\` added)
 - \`deploy_env\` → \`deploy_to_env\`, with \`--set $HELM_SET_PATH=<ECR registry>/<ECR repository>\`
 - \`security_snyk_scan\` → \`security_snyk_scan_ecr\`, with \`image_ref\`
-- Helm \`image.repository\` → \`ecr_repository\` placeholder
+- Helm \`image.repository\` → \`ecr_repository\` placeholder, and \`ghcr-pull-secret\` removed from \`imagePullSecrets\`
 
 ${manual:+### Needs a manual check
 $(printf '%s\n' "$manual" | sed 's/^/- /')

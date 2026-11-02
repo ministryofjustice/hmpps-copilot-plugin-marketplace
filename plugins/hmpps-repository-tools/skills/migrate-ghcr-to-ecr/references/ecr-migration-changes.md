@@ -22,13 +22,12 @@ Shared workflows live in `ministryofjustice/hmpps-github-actions/.github/workflo
 
 | Current                   | New                                                                  | Notes                                                       |
 | ------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `docker_build.yml`        | `docker_build_ecr.yml`                                               | Remove `docker_registry` and `registry_org`; add the secret |
+| `docker_build.yml`        | `docker_build_ecr.yml`                                               | Remove `docker_registry`, `registry_org` and `image_name`; add the secret |
 | `docker_push.yml`         | `docker_push_ecr.yml`                                                | See "Separate build and push" below                         |
 | `deploy_env.yml`          | `deploy_to_env.yml`                                                  | Wrapper around `deploy_env.yml`; needs `id-token: write`    |
+| `security_snyk_scan.yml` or `security_snyk_scan_private.yml` | `security_snyk_scan_ecr.yml` | Add `image_ref`, the secret and `id-token: write`           |
 
 `deploy_to_env.yml` is required, not optional. It wraps `deploy_env.yml` so existing callers keep working without `id-token`; the wrapper needs `id-token: write` for the `notify_on_deploy` job, which uses an octo-sts token to notify another workflow.
-
-| `security_snyk_scan.yml`  | `security_snyk_scan_ecr.yml`                                         | Add `image_ref`, the secret and `id-token: write`           |
 
 ## Edits by workflow
 
@@ -36,6 +35,7 @@ Shared workflows live in `ministryofjustice/hmpps-github-actions/.github/workflo
 
 - Change the `uses:` file name.
 - Delete `docker_registry: 'ghcr.io'` and `registry_org: ...` (the ECR workflow only retains them for compatibility).
+- Delete `image_name` if it is set. In `docker_build.yml` it was the GHCR package name; in `docker_build_ecr.yml` it is the ECR repository name and defaults to `vars.ECR_REPOSITORY`, so keeping the old value pushes to the wrong (probably non-existent) ECR repository. If it isn't the repository name, or is an expression such as `${{ matrix.image }}`, the repository builds more than one image: stop and ask, because each image needs its own ECR repository.
 - Keep all other inputs unchanged (`push`, `docker_multiplatform`, `additional_docker_tag`, `generate_sbom`, `attach_sbom_to_registry`, `sign_image`, `download_build_artifacts`, `file`, and so on).
 - Add under the job:
 
@@ -61,6 +61,7 @@ Some repositories build without pushing (`push: false`, `load: true`, `upload_im
 - The build job moves to `docker_build_ecr.yml` as above, keeping `push: false`.
 - The push job moves to `docker_push_ecr.yml`. Its inputs differ from `docker_push.yml`:
   - Remove `docker_registry` and `registry_org`.
+  - Remove `image_name`: `docker_push_ecr.yml` doesn't accept it, and an unknown input fails workflow validation. The build and push must use the same ECR repository; see the build section above if it isn't the repository name.
   - Add `ecr_repository: ${{ vars.ECR_REPOSITORY }}` and `ecr_registry_url: ${{ vars.CLOUD_PLATFORM_ECR_REGISTRY_URL }}`. This mirrors how `docker_build_ecr.yml` calls `docker_push_ecr.yml` for multiplatform builds.
   - `aws_region` is optional and defaults to `eu-west-2`; add `aws_region: ${{ vars.ECR_REGION }}` only if the repository's `ECR_REGION` differs.
   - Pass the required secret: `ECR_ROLE_TO_ASSUME: ${{ secrets.ECR_ROLE_TO_ASSUME }}`.
@@ -75,7 +76,7 @@ For each deploy job (including commented-out preprod and prod jobs, so they stay
 This includes the repository's own manual-deploy workflow, if it has one. In the templates this is `.github/workflows/deploy_to_env.yml` (triggered by `workflow_dispatch`, deploying an existing version); older repositories may call it `deploy_env.yml` or something else. Despite the name, it is a local workflow that calls the shared one, so it needs the same edits, including `helm_additional_args`. It may already call the shared `deploy_to_env.yml` and still lack the image override. Not every repository has one; don't create it if it's missing.
 
 - Change the `uses:` file name to `deploy_to_env.yml`.
-- Add `helm_additional_args` to `with:`. If the job already sets `helm_additional_args`, append rather than overwrite. Use the `--set` path from [Helm values](#helm-values) (`<image-repository-path>` below), for example `image.repository` or `generic-service.image.repository`:
+- Add `helm_additional_args` to `with:`. If the job already sets `helm_additional_args`, append rather than overwrite. If it already sets the image repository (`--set <image-repository-path>=ghcr.io/...`), replace that value instead of adding a second `--set`; if it points somewhere other than GHCR or ECR, ask. Use the `--set` path from [Helm values](#helm-values) (`<image-repository-path>` below), for example `image.repository` or `generic-service.image.repository`:
 
   ```yaml
   helm_additional_args: '--set <image-repository-path>=${{ vars.CLOUD_PLATFORM_ECR_REGISTRY_URL }}/${{ vars.ECR_REPOSITORY }}'
@@ -93,14 +94,14 @@ This includes the repository's own manual-deploy workflow, if it has one. In the
 
 ### Snyk scan (`security_snyk_scan` to `security_snyk_scan_ecr`)
 
-- Change the `uses:` file name.
-- Add `image_ref: '${{ vars.CLOUD_PLATFORM_ECR_REGISTRY_URL }}/${{ vars.ECR_REPOSITORY }}:latest'` to `with:`. Only relevant when `scan_type` is `image`.
-- Add `id-token: write` to the job permissions.
+- Change the `uses:` file name. This applies to `security_snyk_scan_private.yml` too.
+- Add `image_ref: '${{ vars.CLOUD_PLATFORM_ECR_REGISTRY_URL }}/${{ vars.ECR_REPOSITORY }}:latest'` to `with:`. Only relevant when `scan_type` is `image`. If `image_ref` is already set to a GHCR image, replace the registry and image name with `${{ vars.CLOUD_PLATFORM_ECR_REGISTRY_URL }}/${{ vars.ECR_REPOSITORY }}` and keep its tag or digest.
+- Add `id-token: write` to the job permissions. If the job has no permissions block and inherits `write-all`, leave it. If you add a block, it must include everything `security_snyk_scan_ecr.yml` requests: `contents: read`, `security-events: write`, `actions: read` and `id-token: write`.
 - Add `ECR_ROLE_TO_ASSUME: ${{ secrets.ECR_ROLE_TO_ASSUME }}` to `secrets:`.
 
 ### Helm values
 
-In `helm_deploy/<app>/values.yaml`, replace only the hard-coded GHCR `repository` value under `image:`. Depending on the chart, `image:` is either nested under `generic-service:` (as in the templates) or at the top level (custom charts):
+In `helm_deploy/<app>/values.yaml`, replace only the app's hard-coded GHCR `repository` value under `image:`, at the `--set` path described below. Other images in the values (sidecars, init containers, other charts' images) are not overridden at deploy time; show them to the developer and leave them unchanged. Depending on the chart, `image:` is either nested under `generic-service:` (as in the templates) or at the top level (custom charts):
 
 ```yaml
 generic-service:
@@ -113,6 +114,15 @@ image:
   repository: ecr_repository # override at deployment time
 ```
 
+Remove `ghcr-pull-secret` from the app's `imagePullSecrets` (a sibling of its `image:` key, for example `generic-service.imagePullSecrets`). Cloud Platform pulls from ECR without a pull secret. If it is the only entry, remove the whole `imagePullSecrets` key; otherwise remove just that entry:
+
+```yaml
+  imagePullSecrets:
+    - name: 'ghcr-pull-secret'
+```
+
+Only remove it from `imagePullSecrets`. Other references, such as a `ghcr-pull-secret` entry under `namespace_secrets` (which exposes `GHCR_AUTH_CONFIG` to the app) or in a custom chart's templates, may be used by the app itself; show them to the developer and leave them unless they confirm.
+
 Leave `tag` (and any other keys) as they are. The templates' `tag: app_version` placeholder already existed there; do not add or change it, because some charts read the version from elsewhere (for example `.Values.version`).
 
 The real repository is supplied at deploy time by `helm_additional_args`, so the `--set` path must be the full path of that `image.repository` key in the values: `generic-service.image.repository` for the nested form, `image.repository` for the top-level form. `node scripts/find-workflows.mjs` reports every `image.repository` key it finds in `helmImageRepositories`, and the path in `helmSetPath` when there is exactly one distinct path. Each project has only one. Take the path from the values, not from `Chart.yaml` or the templates: a chart can have `image` at the top level whatever its dependencies are. If `helmSetPath` is `null` (none found, or more than one distinct path), show the developer what was found and ask. Tell the developer which path you used.
@@ -124,5 +134,9 @@ Granting `permissions:` on a job or workflow resets every permission not listed 
 - the caller (job or top-level workflow) lacks `id-token: write` required by the called workflow;
 - a job-level `permissions` block is added that omits something the job previously inherited from the top level (for example `actions: write`, `attestations: write`, `packages: write`);
 - `secrets: inherit` is replaced by an explicit `secrets:` list that misses a secret, or vice versa.
+
+When adding a job-level block, include at least what the new shared workflow requests (the caller must grant it): `deploy_to_env.yml` and `docker_push_ecr.yml` request `contents: read` and `id-token: write`; `security_snyk_scan_ecr.yml` requests `contents: read`, `security-events: write`, `actions: read` and `id-token: write`. If the job inherits `permissions: write-all`, it already has everything; don't add a block.
+
+The `id-token: write` grant must reach the top of every chain of local reusable workflows: if `pipeline.yml` calls `wrapper.yml`, which calls `deploy.yml`, which calls the shared workflow, then `deploy.yml`, `wrapper.yml` and the calling jobs (or top-level permissions) in `pipeline.yml` all need it, including callers that already looked fine one level down.
 
 For each changed job, work out the effective permissions before and after, and make sure nothing is lost. Add `id-token: write`, including at the top-level `permissions` block when jobs call local reusable workflows that wrap the shared ones (a called workflow cannot exceed its caller's permissions); do not remove other permissions, even where the templates look tighter, as these have been kept for backwards compatibility.

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Lists GitHub Actions workflows that call the shared HMPPS workflows relevant to the ECR migration,
-// other places that still reference ghcr.io, and where `image.repository` sits in the Helm values
+// other places that still reference GHCR (ghcr.io, ghcr-pull-secret and so on), and where `image.repository` sits in the Helm values
 // (which gives the --set path for the deploy jobs). Read-only; prints JSON to stdout.
 // Usage: node find-workflows.mjs [repo-root]
 import { readdirSync, readFileSync, statSync } from 'node:fs'
@@ -11,7 +11,7 @@ const SHARED = /ministryofjustice\/hmpps-github-actions\/\.github\/workflows\/([
 const TARGETS = new Set([
   'docker_build', 'docker_push', 'docker_build_ecr', 'docker_push_ecr',
   'deploy_env', 'deploy_to_env',
-  'security_snyk_scan', 'security_snyk_scan_ecr',
+  'security_snyk_scan', 'security_snyk_scan_private', 'security_snyk_scan_ecr',
 ])
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'build', 'dist', 'out', '.gradle', 'target'])
 
@@ -64,7 +64,7 @@ const walk = dir => {
           sharedCalls.push({ file: rel, line: i + 1, workflow: m[1], ref: m[2], commented: text.trim().startsWith('#') })
         }
       }
-      if (/ghcr\.io/i.test(text)) ghcrReferences.push({ file: rel, line: i + 1, text: text.trim() })
+      if (/ghcr/i.test(text)) ghcrReferences.push({ file: rel, line: i + 1, text: text.trim() })
     })
   }
 }

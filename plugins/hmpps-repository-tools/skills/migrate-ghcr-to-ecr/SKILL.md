@@ -50,7 +50,7 @@ Run `node scripts/prepare-branch.mjs`. It pulls the default branch and creates `
 
 ### 3. Discover and summarise
 
-Run `node scripts/find-workflows.mjs`. It returns every call to the relevant shared workflows (including commented-out ones), every remaining `ghcr.io` reference, and where `image.repository` sits in the Helm values (`helmImageRepositories` and `helmSetPath`).
+Run `node scripts/find-workflows.mjs`. It returns every call to the relevant shared workflows (including commented-out ones), every remaining GHCR reference (`ghcr.io`, `ghcr-pull-secret` and so on), and where `image.repository` sits in the Helm values (`helmImageRepositories` and `helmSetPath`).
 
 Read each workflow file it identifies in full, then present a summary **before editing**:
 
@@ -58,7 +58,7 @@ Read each workflow file it identifies in full, then present a summary **before e
 - whether build and push are combined (`docker_build` with `push: true`) or separate (a `docker_push` job after tests);
 - whether the repository uses multiplatform builds, matrices, or reusable local workflows that wrap the shared ones;
 - the Helm `--set` path for the image repository, taken from `helmSetPath` (for example `image.repository` or `generic-service.image.repository`). If it is `null`, show `helmImageRepositories` and ask;
-- each `ghcr.io` reference and whether it is in scope (for example `helm_deploy/*/values.yaml` is; documentation is not);
+- each GHCR reference and whether it is in scope (for example the app's image and `imagePullSecrets` in `helm_deploy/*/values.yaml` are; documentation, sidecar images and `namespace_secrets` are not);
 - anything unusual that does not fit the reference.
 
 Then **stop and wait for the developer's explicit confirmation**. Do not edit any file until they reply, even when the plan looks straightforward and matches the reference. Resolve any ambiguity in that conversation.
@@ -77,7 +77,7 @@ Look for jobs that depend on the build output or registry details, such as other
 
 - Run `git diff` and check every `uses:` points at an existing shared workflow file.
 - Check the edited YAML is valid: run `actionlint` if installed, otherwise re-read each edited file for indentation and syntax errors. State plainly in the final report which of these you did; never say `actionlint` passed unless you ran it.
-- Re-run `node scripts/find-workflows.mjs` and confirm no in-scope `ghcr.io` references remain, or explain each one left.
+- Re-run `node scripts/find-workflows.mjs` and confirm no in-scope GHCR references remain, or explain each one left.
 - Flag any Dockerfile `FROM ghcr.io/...` base image to the developer. Leave it unchanged (it is not where this app's image is pushed), but note that the build will need authentication to pull it if that package is ever made internal.
 
 ### 6. Review with developer
@@ -92,4 +92,7 @@ Show the diff summary file by file. List every judgement call you made and every
 - Commented-out deploy jobs (preprod, prod) still need updating, so that enabling them later does not reintroduce GHCR.
 - The Helm `--set` path is wherever `image.repository` is in the values: `generic-service.image.repository` in the templates, but plain `image.repository` in custom charts with a top-level `image:`. Don't default to the template path or infer it from `Chart.yaml`; a wrong path deploys without error but still runs the old GHCR image.
 - A manual-deploy workflow in the repository (for example `.github/workflows/deploy_to_env.yml`) needs the `helm_additional_args` image override too, even if it already calls the shared `deploy_to_env.yml`.
-- Separate build/push pipelines use `docker_push_ecr.yml`, which has different inputs from `docker_push.yml`. Verify against the live file.
+- Separate build/push pipelines use `docker_push_ecr.yml`, which has different inputs from `docker_push.yml`. Verify against the live file. Any input the new workflow doesn't accept fails validation before the job runs.
+- Remove `image_name` from build and push jobs: in the ECR workflows the repository comes from `vars.ECR_REPOSITORY`. If it differs from the repository name, the repository builds more than one image; ask.
+- An existing GHCR value (`--set ...image.repository=ghcr.io/...` or a GHCR `image_ref`) must be switched to ECR, not left alongside the new one.
+- Remove `ghcr-pull-secret` from the app's `imagePullSecrets` only. Leave other uses, such as `namespace_secrets`, for the developer: some apps (for example `hmpps-snyk-discovery`) use GHCR credentials themselves.
