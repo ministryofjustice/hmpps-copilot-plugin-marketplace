@@ -41,6 +41,28 @@ To remove the marketplace and uninstall these plugins, run:
 
 ---
 
+## Using with OpenCode
+
+These skills can also be installed for use with [OpenCode](https://opencode.ai/).
+
+Clone this repo and run the installation script:
+
+```bash
+git clone https://github.com/ministryofjustice/hmpps-copilot-plugin-marketplace.git
+cd hmpps-copilot-plugin-marketplace
+./scripts/install-opencode-skills.sh
+```
+
+This creates symlinks in `~/.config/opencode/skills/` pointing to the skill folders in this repo. Restart OpenCode to pick up the new skills.
+
+To remove the installed skills:
+
+```bash
+./scripts/install-opencode-skills.sh --remove
+```
+
+---
+
 ## Available plugins
 
 | Plugin                                                                                         | Description                                                                                                                                                    |
