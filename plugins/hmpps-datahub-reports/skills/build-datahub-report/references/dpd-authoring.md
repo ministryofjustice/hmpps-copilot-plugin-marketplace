@@ -59,7 +59,7 @@ A field's `filter` has a `type` (`select`, `radio`, `multiselect`, `date`, `date
 - The platform wraps dataset SQL in an outer query for security filtering. Recursive CTEs and a trailing semicolon cause failures at run time even when the SQL runs directly in Redshift.
 - Query engine limits only show up by running the report. Test through the UI in `dev` before promoting.
 - A sectioned report (`list-section`) can be downloaded; row ordering in the export differs from the on-screen order. Do not redesign a report because the test UI lacks a download button.
-- Do not hard-code environment-specific values in SQL. Use `${env}` in URLs and rely on the caseload policy rather than hard-coded prison codes.
+- Rely on the caseload policy rather than hard-coded prison codes. For service URLs, use the host for the DPD's environment and update it on promotion; use the documented `-${env}` token only if an existing DPD demonstrates that it resolves correctly for that host.
 - Real data may appear in test and sample output. Keep personal data out of the repository.
 - NOMIS-sourced tables often hold flags as `'Y'`/`'N'` strings and names in upper case, while newer service tables use real booleans. Check column types before writing conditions.
 - Declare count columns as `long` in the dataset `schema`.
