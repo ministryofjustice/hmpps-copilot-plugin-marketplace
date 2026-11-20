@@ -38,6 +38,12 @@
       "description": "Skills for building reports and data products on the HMPPS DataHub (Digital Prison Reporting) platform, including read-only Redshift MCP setup.",
       "version": "0.1.0",
       "source": "plugins/hmpps-datahub-reports"
+    },
+    {
+      "name": "hmpps-repository-tools",
+      "description": "Skills for working with HMPPS GitHub repositories, to assist with migrations and reconfigurations.",
+      "version": "0.1.0",
+      "source": "plugins/hmpps-repository-tools"
     }
   ]
 }
