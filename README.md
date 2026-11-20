@@ -49,6 +49,8 @@ To remove the marketplace and uninstall these plugins, run:
 | [`hmpps-proxy-aware`](plugins/hmpps-proxy-aware/skills/make-typescript-proxy-aware/README.md)   | Make TypeScript services proxy-aware using HMPPS patterns, including hmpps-rest-client migrations, telemetry updates, and staged Helm rollout support        |
 | [`hmpps-repository-tools`](plugins/hmpps-repository-tools/skills/migrate-ghcr-to-ecr/README.md) | Migrate a repository's build, deploy and Snyk workflows from GHCR to ECR |
 
+| [`hmpps-datahub-reports`](plugins/hmpps-datahub-reports/skills/build-datahub-report/SKILL.md) | Build reports and data products on the DataHub (Digital Prison Reporting) platform, including setting up read-only, development-only Redshift MCP access |
+
 ---
 
 ## To create a new plugin

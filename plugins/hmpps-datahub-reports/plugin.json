@@ -1,0 +1,11 @@
+{
+  "name": "hmpps-datahub-reports",
+  "description": "Skills for building reports and data products on the HMPPS DataHub (Digital Prison Reporting) platform, using the Redshift datamart and data product definitions.",
+  "version": "0.1.0",
+  "author": {
+    "name": "HMPPS Digital",
+    "email": "plugins@hmpps.digital"
+  },
+  "license": "MIT",
+  "keywords": ["datahub", "digital-prison-reporting", "dpr", "redshift", "reporting", "data-product-definition", "mcp"]
+}
