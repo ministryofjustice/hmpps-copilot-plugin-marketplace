@@ -46,7 +46,7 @@ A field's `filter` has a `type` (`select`, `radio`, `multiselect`, `date`, `date
 
 ## Formulae
 
-`formula` transforms a value for display, for example `format_date(${date_col}, 'dd/MM/yyyy')` or `make_url('https://prisoner${env}.digital.prison.service.justice.gov.uk/prisoner/${prisoner_number}', ${prisoner_number}, TRUE)`. Check the schema README for the supported functions and tokens.
+`formula` transforms a value for display, for example `format_date(${date_col}, 'dd/MM/yyyy')` or `make_url('https://prisoner-${env}.digital.prison.service.justice.gov.uk/prisoner/${prisoner_number}', ${prisoner_number}, TRUE)`. Check the schema README for the supported functions and tokens.
 
 ## Publishing details
 
