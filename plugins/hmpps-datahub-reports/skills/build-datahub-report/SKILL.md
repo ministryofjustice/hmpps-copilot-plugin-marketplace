@@ -72,9 +72,9 @@ Clone `ministryofjustice/hmpps-dpr-data-product-definitions` next to the user's 
 Layout, per environment folder (`dev`, `test`, `preprod`, `prod`):
 
 ```
-<env>/definitions/prisons/orphanage/   reports without a DPS service home
-<env>/definitions/prisons/dps/<service>/   reports owned by a DPS service team
-<env>/definitions/probation/           probation reports (extra LAO policy rules apply)
+dpd/<env>/definitions/prisons/orphanage/   reports without a DPS service home
+dpd/<env>/definitions/prisons/dps/<service>/   reports owned by a DPS service team
+dpd/<env>/definitions/probation/           probation reports (extra LAO policy rules apply)
 ```
 
 New work goes in `dev` first. Promotion to later environments is a separate, deliberate change.
